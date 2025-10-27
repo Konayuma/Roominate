@@ -1,3 +1,46 @@
 <resources>
     <string name="app_name">Roominate</string>
+    
+    <!-- Welcome Screen -->
+    <string name="bedroom_illustration">Bedroom Illustration</string>
+    <string name="welcome_tagline">Find your space, find your place.</string>
+    <string name="sign_in">I already have an account</string>
+    <string name="sign_up">Get started</string>
+    <string name="terms_privacy_text">By signing in, you agree to our Terms of Service and Privacy Policy</string>
+    
+    <!-- Common -->
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="full_name">Full Name</string>
+    <string name="phone_number">Phone Number</string>
+    <string name="forgot_password">Forgot Password?</string>
+    <string name="dont_have_account">Don\'t have an account?</string>
+    <string name="already_have_account">Already have an account?</string>
+    <string name="register">Register</string>
+    <string name="login">Login</string>
+    
+    <!-- Boarding House -->
+    <string name="search_boarding_houses">Search boarding houses...</string>
+    <string name="filters">Filters</string>
+    <string name="price_range">Price Range</string>
+    <string name="amenities">Amenities</string>
+    <string name="available_rooms">Available Rooms</string>
+    <string name="per_month">/month</string>
+    <string name="contact_owner">Contact Owner</string>
+    <string name="book_now">Book Now</string>
+    
+    <!-- Profile -->
+    <string name="profile">Profile</string>
+    <string name="edit_profile">Edit Profile</string>
+    <string name="logout">Logout</string>
+    <string name="save">Save</string>
+    
+    <!-- Validation Messages -->
+    <string name="error_email_required">Email is required</string>
+    <string name="error_email_invalid">Invalid email address</string>
+    <string name="error_password_required">Password is required</string>
+    <string name="error_password_short">Password must be at least 6 characters</string>
+    <string name="error_passwords_not_match">Passwords do not match</string>
+    <string name="error_name_required">Full name is required</string>
+    <string name="error_phone_required">Phone number is required</string>
 </resources>

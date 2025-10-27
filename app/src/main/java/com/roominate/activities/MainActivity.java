@@ -19,7 +19,16 @@ public class MainActivity extends AppCompatActivity {
     private void checkUserSession() {
         // TODO: Implement session check with Supabase
         // If logged in, redirect to appropriate dashboard based on user type
-        // If not logged in, redirect to login
+        // If not logged in, redirect to welcome screen
+        
+        // For now, redirect to welcome screen
+        redirectToWelcome();
+    }
+    
+    private void redirectToWelcome() {
+        // Intent intent = new Intent(this, WelcomeActivity.class);
+        // startActivity(intent);
+        // finish();
     }
 
     private void redirectToDashboard(String userType) {

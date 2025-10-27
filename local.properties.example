@@ -1,0 +1,8 @@
+# Copy this file to local.properties in the project root (do NOT commit your real keys)
+# Example entries for Supabase build config (local development only)
+
+# Replace with your Supabase project URL (example: https://kajeakfzavbheljvdlnp.supabase.co)
+SUPABASE_URL=https://your-project-ref.supabase.co
+
+# Replace with your project's anon (public) key from Supabase Dashboard
+SUPABASE_ANON_KEY=your-anon-key-here

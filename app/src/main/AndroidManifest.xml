@@ -2,6 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -10,6 +19,55 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Roominate" />
+        android:theme="@style/Theme.Roominate.Transparent"
+        android:usesCleartextTraffic="true"
+        tools:targetApi="31">
+        
+        <!-- Splash Screen - Entry Point -->
+        <activity
+            android:name=".activities.auth.SplashActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Roominate.Splash">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        
+        <!-- Auth Activities -->
+        <activity android:name=".activities.auth.MainActivity" />
+        <activity android:name=".activities.auth.WelcomeActivity" android:theme="@style/Theme.Roominate" />
+        <activity android:name=".activities.auth.LoginActivity" />
+        <activity android:name=".activities.auth.RegisterActivity" />
+        <activity android:name=".activities.auth.ForgotPasswordActivity" />
+        <activity android:name=".activities.auth.RoleSelectionActivity" />
+        <activity android:name=".activities.auth.SignUpEmailActivity" />
+        <activity android:name=".activities.auth.SignUpEmailVerificationActivity" />
+        <activity android:name=".activities.auth.SignUpPasswordActivity" />
+        <activity android:name=".activities.auth.SignUpWelcomeActivity" />
+        
+        <!-- Tenant Activities -->
+        <activity android:name=".activities.tenant.TenantDashboardActivity" />
+        <activity android:name=".activities.tenant.SearchActivity" />
+        <activity android:name=".activities.tenant.BoardingHouseDetailsActivity" />
+        <activity android:name=".activities.tenant.BookingActivity" />
+        <activity android:name=".activities.tenant.MyBookingsActivity" />
+        <activity android:name=".activities.tenant.TenantProfileActivity" />
+        
+        <!-- Owner Activities -->
+        <activity android:name=".activities.owner.OwnerDashboardActivity" />
+        <activity android:name=".activities.owner.AddPropertyActivity" />
+        <activity android:name=".activities.owner.EditPropertyActivity" />
+        <activity android:name=".activities.owner.ManageListingsActivity" />
+        <activity android:name=".activities.owner.InquiriesActivity" />
+        <activity android:name=".activities.owner.OwnerProfileActivity" />
+        
+        <!-- Admin Activities -->
+        <activity android:name=".activities.admin.AdminDashboardActivity" />
+        <activity android:name=".activities.admin.UserManagementActivity" />
+        <activity android:name=".activities.admin.VerifyListingsActivity" />
+        <activity android:name=".activities.admin.ContentModerationActivity" />
+        
+    </application>
 
 </manifest>
