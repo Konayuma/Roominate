@@ -73,7 +73,8 @@ public class RoleSelectionActivity extends AppCompatActivity {
     }
 
     private void proceedToNextStep() {
-        Intent intent = new Intent(RoleSelectionActivity.this, SignUpEmailActivity.class);
+        // Move to Basic Info screen before collecting email
+        Intent intent = new Intent(RoleSelectionActivity.this, SignUpBasicInfoActivity.class);
         intent.putExtra("userRole", selectedRole);
         startActivity(intent);
         overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);

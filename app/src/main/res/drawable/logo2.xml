@@ -1,5 +1,17 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt"
-    android:viewportWidth="351"
-    android:viewportHeight="140"
-    android:width="351dp"
-    android:height="140dp" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024"
+    android:width="1024dp"
+    android:height="1024dp">
+    <!-- Simplified black logo (main house/pin + inner marker) -->
+    <path
+        android:pathData="M512.5 298L668 430.5L668 498.5L672 505.5L675 516.5L675 536.5L671 550.5L659 576.5Q638.5 612 613.5 643L607.5 644L602 639.5Q580 611.5 562 579.5Q553.3 564.4 548 547L472 547L472 643L357 643L357 430.5L364.5 423L397.5 395L404 391Q402.9 388.3 405.5 389L446.5 353L458 345Q456.9 342.3 459.5 343L472 333Q470.9 330.3 473.5 331L512.5 298ZM605 473L592 476L579 483L562 502L556 520L556 533L561 551L577 582L607 626L611 628L649 571L662 544L664 536L664 519L661 508Q655 493 644 484Q641 485 642 482L639 482L639 480L623 474L605 473Z"
+        android:fillColor="#000000"
+        android:strokeColor="#000000"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M605.5 504Q623.8 502.7 630 513.5Q635.7 519.8 634 533.5Q631.5 542.5 624.5 547L615.5 551L605.5 551Q594.8 548.7 590 540.5L587 534.5L587 520.5Q589.9 512.4 596.5 508L605.5 504Z"
+        android:fillColor="#000000"
+        android:strokeColor="#000000"
+        android:strokeWidth="1" />
+</vector>

@@ -26,7 +26,7 @@ public class SignUpEmailActivity extends AppCompatActivity {
     private TextInputEditText emailEditText;
     private Button continueButton;
     private ProgressBar progressBar;
-    private String userRole;
+    private String userRole, firstName, lastName, dob, phone;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,8 +39,12 @@ public class SignUpEmailActivity extends AppCompatActivity {
         
         setContentView(R.layout.activity_signup_email);
 
-        // Get user role from previous screen
+        // Get user role and basic info from previous screen
         userRole = getIntent().getStringExtra("userRole");
+        firstName = getIntent().getStringExtra("firstName");
+        lastName = getIntent().getStringExtra("lastName");
+        dob = getIntent().getStringExtra("dob");
+        phone = getIntent().getStringExtra("phone");
 
         initializeViews();
         setupListeners();
@@ -105,6 +109,10 @@ public class SignUpEmailActivity extends AppCompatActivity {
                     // OTP sent successfully, proceed to verification screen
                     Intent intent = new Intent(SignUpEmailActivity.this, SignUpEmailVerificationActivity.class);
                     intent.putExtra("userRole", userRole);
+                    intent.putExtra("firstName", firstName);
+                    intent.putExtra("lastName", lastName);
+                    intent.putExtra("dob", dob);
+                    intent.putExtra("phone", phone);
                     intent.putExtra("email", email);
                     startActivity(intent);
                     overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);

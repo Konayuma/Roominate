@@ -18,7 +18,7 @@
             android:layout_width="wrap_content"
             android:layout_height="80dp"
             android:adjustViewBounds="true"
-            android:src="@drawable/logosmall"
+            android:src="@drawable/logo2"
             android:layout_marginTop="60dp"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"

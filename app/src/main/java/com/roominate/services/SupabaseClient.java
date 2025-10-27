@@ -164,6 +164,87 @@ public class SupabaseClient {
     }
     
     /**
+     * Create user account with profile data
+     * Uses Supabase Auth signUp + creates profile in public.users table
+     */
+    public void createUser(JSONObject userData, ApiCallback callback) {
+        Log.d(TAG, "=== CREATE USER CALLED ===");
+        
+        try {
+            String url = BuildConfig.SUPABASE_URL + "/auth/v1/signup";
+            Log.d(TAG, "URL: " + url);
+            
+            // Prepare signup payload
+            JSONObject signupData = new JSONObject();
+            signupData.put("email", userData.getString("email"));
+            signupData.put("password", userData.getString("password"));
+            
+            // Add user metadata (stored in auth.users.raw_user_meta_data)
+            JSONObject userMetadata = new JSONObject();
+            userMetadata.put("role", userData.getString("role"));
+            userMetadata.put("first_name", userData.getString("first_name"));
+            userMetadata.put("last_name", userData.getString("last_name"));
+            userMetadata.put("dob", userData.getString("dob"));
+            userMetadata.put("phone", userData.getString("phone"));
+            signupData.put("data", userMetadata);
+            
+            Log.d(TAG, "Signup data: " + signupData.toString());
+            
+            RequestBody requestBody = RequestBody.create(
+                    signupData.toString(),
+                    MediaType.parse("application/json; charset=utf-8")
+            );
+            
+            Request request = new Request.Builder()
+                    .url(url)
+                    .post(requestBody)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .build();
+            
+            Log.d(TAG, "Sending create user request...");
+            
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "❌ Create user NETWORK FAILURE", e);
+                    callback.onError("Network error: " + e.getMessage());
+                }
+                
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    Log.d(TAG, "=== CREATE USER RESPONSE ===");
+                    Log.d(TAG, "Status code: " + response.code());
+                    
+                    String responseBody = response.body() != null ? response.body().string() : "";
+                    Log.d(TAG, "Response body: " + responseBody);
+                    
+                    try {
+                        JSONObject json = new JSONObject(responseBody);
+                        
+                        if (response.isSuccessful()) {
+                            Log.d(TAG, "✅ User created SUCCESS");
+                            callback.onSuccess(json);
+                        } else {
+                            String error = json.optString("error_description", 
+                                          json.optString("msg", "Failed to create account"));
+                            Log.e(TAG, "❌ Create user FAILED: " + error);
+                            callback.onError(error);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "❌ Parse error", e);
+                        callback.onError("Failed to parse response");
+                    }
+                }
+            });
+            
+        } catch (Exception e) {
+            Log.e(TAG, "❌ Create user exception", e);
+            callback.onError("Failed to create user: " + e.getMessage());
+        }
+    }
+    
+    /**
      * Callback interface for API responses
      */
     public interface ApiCallback {

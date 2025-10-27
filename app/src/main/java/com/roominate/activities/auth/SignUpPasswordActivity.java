@@ -12,10 +12,13 @@ import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.roominate.R;
+import com.roominate.services.SupabaseClient;
+import org.json.JSONObject;
 
 public class SignUpPasswordActivity extends AppCompatActivity {
 
@@ -23,15 +26,12 @@ public class SignUpPasswordActivity extends AppCompatActivity {
     private TextInputEditText passwordEditText;
     private TextInputLayout confirmPasswordLayout;
     private TextInputEditText confirmPasswordEditText;
-    private ImageButton passwordVisibilityToggle;
-    private ImageButton confirmPasswordVisibilityToggle;
     private TextView passwordStrengthText;
     private ProgressBar passwordStrengthBar;
     private Button continueButton;
+    private ProgressBar progressBar;
     
-    private String userRole, fullName, email, phone;
-    private boolean isPasswordVisible = false;
-    private boolean isConfirmPasswordVisible = false;
+    private String userRole, firstName, lastName, dob, phone, email;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,6 +46,10 @@ public class SignUpPasswordActivity extends AppCompatActivity {
 
         // Get data from previous screen
         userRole = getIntent().getStringExtra("userRole");
+        firstName = getIntent().getStringExtra("firstName");
+        lastName = getIntent().getStringExtra("lastName");
+        dob = getIntent().getStringExtra("dob");
+        phone = getIntent().getStringExtra("phone");
         email = getIntent().getStringExtra("email");
 
         initializeViews();
@@ -57,19 +61,14 @@ public class SignUpPasswordActivity extends AppCompatActivity {
         passwordEditText = findViewById(R.id.passwordEditText);
         confirmPasswordLayout = findViewById(R.id.confirmPasswordLayout);
         confirmPasswordEditText = findViewById(R.id.confirmPasswordEditText);
-        passwordVisibilityToggle = findViewById(R.id.passwordVisibilityToggle);
-        confirmPasswordVisibilityToggle = findViewById(R.id.confirmPasswordVisibilityToggle);
         passwordStrengthText = findViewById(R.id.passwordStrengthText);
         passwordStrengthBar = findViewById(R.id.passwordStrengthBar);
         continueButton = findViewById(R.id.continueButton);
+        progressBar = findViewById(R.id.progressBar);
     }
 
     private void setupListeners() {
         continueButton.setOnClickListener(v -> validateAndContinue());
-
-        // Password visibility toggles
-        passwordVisibilityToggle.setOnClickListener(v -> togglePasswordVisibility());
-        confirmPasswordVisibilityToggle.setOnClickListener(v -> toggleConfirmPasswordVisibility());
 
         // Password strength checker
         passwordEditText.addTextChangedListener(new TextWatcher() {
@@ -91,32 +90,6 @@ public class SignUpPasswordActivity extends AppCompatActivity {
                 validatePasswordMatch();
             }
         });
-    }
-
-    private void togglePasswordVisibility() {
-        if (isPasswordVisible) {
-            passwordEditText.setTransformationMethod(PasswordTransformationMethod.getInstance());
-            passwordVisibilityToggle.setImageResource(android.R.drawable.ic_menu_view);
-            isPasswordVisible = false;
-        } else {
-            passwordEditText.setTransformationMethod(HideReturnsTransformationMethod.getInstance());
-            passwordVisibilityToggle.setImageResource(android.R.drawable.ic_menu_close_clear_cancel);
-            isPasswordVisible = true;
-        }
-        passwordEditText.setSelection(passwordEditText.getText().length());
-    }
-
-    private void toggleConfirmPasswordVisibility() {
-        if (isConfirmPasswordVisible) {
-            confirmPasswordEditText.setTransformationMethod(PasswordTransformationMethod.getInstance());
-            confirmPasswordVisibilityToggle.setImageResource(android.R.drawable.ic_menu_view);
-            isConfirmPasswordVisible = false;
-        } else {
-            confirmPasswordEditText.setTransformationMethod(HideReturnsTransformationMethod.getInstance());
-            confirmPasswordVisibilityToggle.setImageResource(android.R.drawable.ic_menu_close_clear_cancel);
-            isConfirmPasswordVisible = true;
-        }
-        confirmPasswordEditText.setSelection(confirmPasswordEditText.getText().length());
     }
 
     private void updatePasswordStrength(String password) {
@@ -193,14 +166,60 @@ public class SignUpPasswordActivity extends AppCompatActivity {
     }
 
     private void proceedToVerification() {
-        // TODO: Create user account with Supabase
+        String password = passwordEditText.getText().toString();
         
-        Intent intent = new Intent(this, SignUpWelcomeActivity.class);
-        intent.putExtra("userRole", userRole);
-        intent.putExtra("email", email);
-        startActivity(intent);
-        overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
-        finish();
+        // Show loading
+        progressBar.setVisibility(View.VISIBLE);
+        continueButton.setEnabled(false);
+        
+        // Create user profile data
+        try {
+            JSONObject userData = new JSONObject();
+            userData.put("email", email);
+            userData.put("password", password);
+            userData.put("role", userRole);
+            userData.put("first_name", firstName);
+            userData.put("last_name", lastName);
+            userData.put("dob", dob);
+            userData.put("phone", phone);
+            
+            // Create user account with Supabase
+            SupabaseClient.getInstance().createUser(userData, new SupabaseClient.ApiCallback() {
+                @Override
+                public void onSuccess(JSONObject response) {
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        continueButton.setEnabled(true);
+                        
+                        Toast.makeText(SignUpPasswordActivity.this, 
+                            "Account created successfully!", Toast.LENGTH_SHORT).show();
+                        
+                        // Proceed to welcome screen
+                        Intent intent = new Intent(SignUpPasswordActivity.this, SignUpWelcomeActivity.class);
+                        intent.putExtra("userRole", userRole);
+                        intent.putExtra("email", email);
+                        startActivity(intent);
+                        overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
+                        finish();
+                    });
+                }
+                
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        continueButton.setEnabled(true);
+                        Toast.makeText(SignUpPasswordActivity.this, 
+                            "Failed to create account: " + error, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+            
+        } catch (Exception e) {
+            progressBar.setVisibility(View.GONE);
+            continueButton.setEnabled(true);
+            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     @Override

@@ -11,7 +11,10 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE TABLE IF NOT EXISTS public.users (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   role text NOT NULL DEFAULT 'tenant', -- 'tenant' | 'owner' | 'admin'
+  first_name text,
+  last_name text,
   display_name text,
+  date_of_birth date,
   phone text,
   avatar_url text,
   bio text,
@@ -253,5 +256,50 @@ CREATE POLICY "Users update own notifications" ON public.notifications
 -- 10) audit_logs - no client access (admin/service only)
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 -- No policies - only service_role can access
+
+-- ============================================================================
+-- TRIGGER: Auto-create user profile when auth.users record is created
+-- ============================================================================
+
+-- Function to handle new user signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.users (
+    id,
+    role,
+    first_name,
+    last_name,
+    display_name,
+    date_of_birth,
+    phone,
+    created_at,
+    updated_at
+  )
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'role', 'tenant'),
+    NEW.raw_user_meta_data->>'first_name',
+    NEW.raw_user_meta_data->>'last_name',
+    CONCAT(
+      COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
+      ' ',
+      COALESCE(NEW.raw_user_meta_data->>'last_name', '')
+    ),
+    (NEW.raw_user_meta_data->>'dob')::date,
+    NEW.raw_user_meta_data->>'phone',
+    NOW(),
+    NOW()
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger that fires after a new user is inserted into auth.users
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
 
 -- End of schema

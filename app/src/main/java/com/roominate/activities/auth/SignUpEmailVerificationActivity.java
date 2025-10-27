@@ -26,7 +26,7 @@ public class SignUpEmailVerificationActivity extends AppCompatActivity {
     private TextView resendText;
     private ProgressBar progressBar;
     
-    private String userRole, email;
+    private String userRole, firstName, lastName, dob, phone, email;
     private CountDownTimer countDownTimer;
 
     @Override
@@ -42,6 +42,10 @@ public class SignUpEmailVerificationActivity extends AppCompatActivity {
 
         // Get data from previous screens
         userRole = getIntent().getStringExtra("userRole");
+        firstName = getIntent().getStringExtra("firstName");
+        lastName = getIntent().getStringExtra("lastName");
+        dob = getIntent().getStringExtra("dob");
+        phone = getIntent().getStringExtra("phone");
         email = getIntent().getStringExtra("email");
 
         initializeViews();
@@ -249,6 +253,10 @@ public class SignUpEmailVerificationActivity extends AppCompatActivity {
     private void proceedToPassword() {
         Intent intent = new Intent(this, SignUpPasswordActivity.class);
         intent.putExtra("userRole", userRole);
+        intent.putExtra("firstName", firstName);
+        intent.putExtra("lastName", lastName);
+        intent.putExtra("dob", dob);
+        intent.putExtra("phone", phone);
         intent.putExtra("email", email);
         startActivity(intent);
         overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
