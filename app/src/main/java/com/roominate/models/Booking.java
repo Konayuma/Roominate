@@ -8,6 +8,11 @@ public class Booking {
     private String boardingHouseId;
     private String ownerId;
     
+    // Denormalized property data for easy display
+    private String propertyName;
+    private String propertyAddress;
+    private String propertyImageUrl;
+
     // Booking Details
     private Date bookingDate;
     private Date moveInDate;
@@ -245,6 +250,60 @@ public class Booking {
     public void setConfirmedAt(Date confirmedAt) {
         this.confirmedAt = confirmedAt;
     }
+
+    // Helper methods for UI
+    public String getFormattedStatus() {
+        if (status == null || status.isEmpty()) {
+            return "Unknown";
+        }
+        return status.substring(0, 1).toUpperCase() + status.substring(1);
+    }
+
+    public String getStatusColor() {
+        if (status == null) {
+            return "#808080"; // Grey for unknown
+        }
+        switch (status.toLowerCase()) {
+            case "pending":
+                return "#FFA500"; // Orange
+            case "confirmed":
+                return "#4CAF50"; // Green
+            case "active":
+                return "#2196F3"; // Blue
+            case "completed":
+                return "#9E9E9E"; // Grey
+            case "cancelled":
+            case "rejected":
+                return "#F44336"; // Red
+            default:
+                return "#808080"; // Grey
+        }
+    }
+
+    public String getPropertyName() {
+        return propertyName;
+    }
+
+    public void setPropertyName(String propertyName) {
+        this.propertyName = propertyName;
+    }
+
+    public String getPropertyAddress() {
+        return propertyAddress;
+    }
+
+    public void setPropertyAddress(String propertyAddress) {
+        this.propertyAddress = propertyAddress;
+    }
+
+    public String getPropertyImageUrl() {
+        return propertyImageUrl;
+    }
+
+    public void setPropertyImageUrl(String propertyImageUrl) {
+        this.propertyImageUrl = propertyImageUrl;
+    }
+
 
     @Override
     public String toString() {

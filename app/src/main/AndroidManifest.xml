@@ -39,6 +39,7 @@
         <activity android:name=".activities.auth.WelcomeActivity" android:theme="@style/Theme.Roominate" />
         <activity android:name=".activities.auth.LoginActivity" />
         <activity android:name=".activities.auth.RegisterActivity" />
+        <activity android:name=".activities.auth.EmailConfirmationActivity" />
         <activity android:name=".activities.auth.ForgotPasswordActivity" />
         <activity android:name=".activities.auth.RoleSelectionActivity" />
         <activity android:name=".activities.auth.SignUpBasicInfoActivity" />
@@ -46,14 +47,29 @@
         <activity android:name=".activities.auth.SignUpEmailVerificationActivity" />
         <activity android:name=".activities.auth.SignUpPasswordActivity" />
         <activity android:name=".activities.auth.SignUpWelcomeActivity" />
+        <!-- Supabase OAuth redirect callback -->
+        <activity
+            android:name=".activities.auth.LoginCallbackActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- Deep-link for Supabase OAuth redirect: com.roominate://login-callback -->
+                <data android:scheme="com.roominate" android:host="login-callback" />
+            </intent-filter>
+        </activity>
         
         <!-- Tenant Activities -->
-        <activity android:name=".activities.tenant.TenantDashboardActivity" />
+        <activity 
+            android:name=".activities.tenant.TenantDashboardActivity"
+            android:theme="@style/Theme.Roominate" />
         <activity android:name=".activities.tenant.SearchActivity" />
         <activity android:name=".activities.tenant.BoardingHouseDetailsActivity" />
         <activity android:name=".activities.tenant.BookingActivity" />
         <activity android:name=".activities.tenant.MyBookingsActivity" />
         <activity android:name=".activities.tenant.TenantProfileActivity" />
+        <activity android:name=".activities.tenant.SettingsActivity" />
         
         <!-- Owner Activities -->
         <activity android:name=".activities.owner.OwnerDashboardActivity" />

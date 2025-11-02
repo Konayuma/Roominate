@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirm Your Email - Roominate</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+    .container {
+      background-color: white;
+      border-radius: 12px;
+      padding: 40px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .logo {
+      font-size: 28px;
+      font-weight: bold;
+      color: #6366f1;
+      margin-bottom: 10px;
+    }
+    .title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #1f2937;
+      margin: 20px 0;
+    }
+    .message {
+      font-size: 16px;
+      color: #6b7280;
+      margin-bottom: 30px;
+      line-height: 1.7;
+    }
+    .token-container {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      margin: 30px 0;
+      border: 2px dashed rgba(255, 255, 255, 0.3);
+    }
+    .token {
+      font-size: 32px;
+      font-weight: bold;
+      color: white;
+      letter-spacing: 4px;
+      font-family: 'Courier New', monospace;
+      margin: 0;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    .token-label {
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .instructions {
+      background-color: #f3f4f6;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      border-left: 4px solid #6366f1;
+    }
+    .instructions h3 {
+      margin: 0 0 10px 0;
+      color: #374151;
+      font-size: 18px;
+    }
+    .instructions ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .instructions li {
+      margin-bottom: 8px;
+      color: #6b7280;
+    }
+    .warning {
+      background-color: #fef3c7;
+      border: 1px solid #f59e0b;
+      border-radius: 6px;
+      padding: 15px;
+      margin: 20px 0;
+      color: #92400e;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      color: #9ca3af;
+      font-size: 14px;
+    }
+    .button {
+      display: inline-block;
+      background-color: #6366f1;
+      color: white;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-weight: 500;
+      margin: 20px 0;
+    }
+    .link {
+      color: #6366f1;
+      text-decoration: none;
+    }
+    .link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">🏠 Roominate</div>
+      <h1 class="title">Confirm Your Email Address</h1>
+    </div>
+
+    <p class="message">
+      Welcome to Roominate! To complete your registration and start finding your perfect boarding house, please confirm your email address.
+    </p>
+
+    <div class="token-container">
+      <div class="token-label">Your Confirmation Token</div>
+      <div class="token">{{ .Token }}</div>
+    </div>
+
+    <div class="instructions">
+      <h3>How to Confirm:</h3>
+      <ol>
+        <li>Copy the token above</li>
+        <li>Return to the Roominate app</li>
+        <li>Paste the token in the confirmation field</li>
+        <li>Click "Confirm Email" to complete your signup</li>
+      </ol>
+    </div>
+
+    <div class="warning">
+      <strong>Important:</strong> This token will expire in 1 hour. If it expires, you'll need to request a new confirmation email.
+    </div>
+
+    <p class="message">
+      If you didn't create an account with Roominate, please ignore this email.
+    </p>
+
+    <div class="footer">
+      <p>
+        © 2025 Roominate. All rights reserved.<br>
+        Need help? Contact our <a href="mailto:support@roominate.com" class="link">support team</a>.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

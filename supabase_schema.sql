@@ -153,6 +153,19 @@ CREATE INDEX IF NOT EXISTS idx_audit_actor ON public.audit_logs (actor_id);
 
 -- 1) users table - allow users to manage their own profile
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "__noop_policy_placeholder" ON public.users FOR SELECT USING (true);
+-- Ensure idempotency: drop existing policies (if any) before creating them
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='users' AND policyname='Insert own profile') THEN
+    EXECUTE 'DROP POLICY "Insert own profile" ON public.users';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='users' AND policyname='Select own profile') THEN
+    EXECUTE 'DROP POLICY "Select own profile" ON public.users';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='users' AND policyname='Update own profile') THEN
+    EXECUTE 'DROP POLICY "Update own profile" ON public.users';
+  END IF;
+END$$;
 
 CREATE POLICY "Insert own profile" ON public.users 
   FOR INSERT WITH CHECK (auth.uid() = id);
@@ -264,33 +277,58 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 -- Function to handle new user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  dob_text TEXT;
+  dob_date DATE;
 BEGIN
-  INSERT INTO public.users (
-    id,
-    role,
-    first_name,
-    last_name,
-    display_name,
-    date_of_birth,
-    phone,
-    created_at,
-    updated_at
-  )
-  VALUES (
-    NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'role', 'tenant'),
-    NEW.raw_user_meta_data->>'first_name',
-    NEW.raw_user_meta_data->>'last_name',
-    CONCAT(
-      COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
-      ' ',
-      COALESCE(NEW.raw_user_meta_data->>'last_name', '')
-    ),
-    (NEW.raw_user_meta_data->>'dob')::date,
-    NEW.raw_user_meta_data->>'phone',
-    NOW(),
-    NOW()
-  );
+  -- Extract dob text safely
+  dob_text := NULLIF(NEW.raw_user_meta_data->>'dob', '');
+  dob_date := NULL;
+
+  -- Only attempt to cast if dob looks like YYYY-MM-DD to avoid runtime errors
+  IF dob_text IS NOT NULL AND dob_text ~ '^\d{4}-\d{2}-\d{2}$' THEN
+    BEGIN
+      dob_date := dob_text::date;
+    EXCEPTION WHEN others THEN
+      -- If parsing fails, keep dob_date as NULL
+      dob_date := NULL;
+    END;
+  END IF;
+
+  -- Defensive insert: coalesce missing names and role
+  BEGIN
+    INSERT INTO public.users (
+      id,
+      role,
+      first_name,
+      last_name,
+      display_name,
+      date_of_birth,
+      phone,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      NEW.id,
+      COALESCE(NEW.raw_user_meta_data->>'role', 'tenant'),
+      NULLIF(NEW.raw_user_meta_data->>'first_name', ''),
+      NULLIF(NEW.raw_user_meta_data->>'last_name', ''),
+      CONCAT(
+        COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
+        ' ',
+        COALESCE(NEW.raw_user_meta_data->>'last_name', '')
+      ),
+      dob_date,
+      NULLIF(NEW.raw_user_meta_data->>'phone', ''),
+      NOW(),
+      NOW()
+    );
+  EXCEPTION WHEN others THEN
+    -- Don't fail the auth signup if the profile insert has an issue. Log a notice for debugging.
+    RAISE NOTICE 'handle_new_user: profile insert failed for auth.id=% - error=%', NEW.id, SQLERRM;
+    -- Optionally you could insert a minimal profile here or enqueue for background processing
+  END;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

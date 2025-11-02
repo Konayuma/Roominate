@@ -9,6 +9,10 @@ constraintlayout = "2.2.0"
 recyclerview = "1.4.0"
 viewpager2 = "1.1.0"
 fragment = "1.8.6"
+supabaseJava = "0.3.0"
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -20,7 +24,4 @@ constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayo
 recyclerview = { group = "androidx.recyclerview", name = "recyclerview", version.ref = "recyclerview" }
 viewpager2 = { group = "androidx.viewpager2", name = "viewpager2", version.ref = "viewpager2" }
 fragment = { group = "androidx.fragment", name = "fragment", version.ref = "fragment" }
-
-[plugins]
-android-application = { id = "com.android.application", version.ref = "agp" }
 

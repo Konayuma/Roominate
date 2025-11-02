@@ -8,6 +8,7 @@ import android.text.TextWatcher;
 import android.text.method.HideReturnsTransformationMethod;
 import android.text.method.PasswordTransformationMethod;
 import android.view.View;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ProgressBar;
@@ -31,7 +32,7 @@ public class SignUpPasswordActivity extends AppCompatActivity {
     private Button continueButton;
     private ProgressBar progressBar;
     
-    private String userRole, firstName, lastName, dob, phone, email;
+    private String email, userType, firstName, lastName, phone;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,14 +46,13 @@ public class SignUpPasswordActivity extends AppCompatActivity {
         setContentView(R.layout.activity_signup_password);
 
         // Get data from previous screen
-        userRole = getIntent().getStringExtra("userRole");
+        email = getIntent().getStringExtra("email");
+        userType = getIntent().getStringExtra("userType");
         firstName = getIntent().getStringExtra("firstName");
         lastName = getIntent().getStringExtra("lastName");
-        dob = getIntent().getStringExtra("dob");
         phone = getIntent().getStringExtra("phone");
-        email = getIntent().getStringExtra("email");
-
         initializeViews();
+
         setupListeners();
     }
 
@@ -166,65 +166,75 @@ public class SignUpPasswordActivity extends AppCompatActivity {
     }
 
     private void proceedToVerification() {
-        String password = passwordEditText.getText().toString();
-        
-        // Show loading
-        progressBar.setVisibility(View.VISIBLE);
-        continueButton.setEnabled(false);
-        
-        // Create user profile data
-        try {
-            JSONObject userData = new JSONObject();
-            userData.put("email", email);
-            userData.put("password", password);
-            userData.put("role", userRole);
-            userData.put("first_name", firstName);
-            userData.put("last_name", lastName);
-            userData.put("dob", dob);
-            userData.put("phone", phone);
-            
-            // Create user account with Supabase
-            SupabaseClient.getInstance().createUser(userData, new SupabaseClient.ApiCallback() {
-                @Override
-                public void onSuccess(JSONObject response) {
-                    runOnUiThread(() -> {
-                        progressBar.setVisibility(View.GONE);
-                        continueButton.setEnabled(true);
-                        
-                        Toast.makeText(SignUpPasswordActivity.this, 
-                            "Account created successfully!", Toast.LENGTH_SHORT).show();
-                        
-                        // Proceed to welcome screen
-                        Intent intent = new Intent(SignUpPasswordActivity.this, SignUpWelcomeActivity.class);
-                        intent.putExtra("userRole", userRole);
-                        intent.putExtra("email", email);
-                        startActivity(intent);
-                        overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
-                        finish();
-                    });
-                }
-                
-                @Override
-                public void onError(String error) {
-                    runOnUiThread(() -> {
-                        progressBar.setVisibility(View.GONE);
-                        continueButton.setEnabled(true);
-                        Toast.makeText(SignUpPasswordActivity.this, 
-                            "Failed to create account: " + error, Toast.LENGTH_LONG).show();
-                    });
-                }
-            });
-            
-        } catch (Exception e) {
-            progressBar.setVisibility(View.GONE);
-            continueButton.setEnabled(true);
-            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        String password = passwordEditText.getText().toString().trim();
+        String confirmPassword = confirmPasswordEditText.getText().toString().trim();
+
+        // Validate password
+        if (password.isEmpty()) {
+            passwordEditText.setError("Password is required");
+            return;
         }
+
+        if (password.length() < 6) {
+            passwordEditText.setError("Password must be at least 6 characters");
+            return;
+        }
+
+        if (!password.equals(confirmPassword)) {
+            confirmPasswordEditText.setError("Passwords do not match");
+            return;
+        }
+
+        String otp = getIntent().getStringExtra("otp");
+        if (otp == null || otp.isEmpty()) {
+            Toast.makeText(this, "Missing verification code", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Show loading
+        if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+        continueButton.setEnabled(false);
+
+        // Complete signup with OTP verification and user creation
+        SupabaseClient.getInstance().completeSignup(email, password, otp, firstName, lastName, phone, userType, null, new SupabaseClient.ApiCallback() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                runOnUiThread(() -> {
+                    if (progressBar != null) progressBar.setVisibility(View.GONE);
+                    continueButton.setEnabled(true);
+
+                    Toast.makeText(SignUpPasswordActivity.this, "Registration completed successfully!", Toast.LENGTH_SHORT).show();
+
+                    // Navigate to dashboard
+                    navigateToDashboard();
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    if (progressBar != null) progressBar.setVisibility(View.GONE);
+                    continueButton.setEnabled(true);
+                    Toast.makeText(SignUpPasswordActivity.this, "Registration failed: " + error, Toast.LENGTH_LONG).show();
+                });
+            }
+        });
     }
 
-    @Override
-    public void onBackPressed() {
-        super.onBackPressed();
-        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right);
+    private void navigateToDashboard() {
+        Intent intent;
+        if ("tenant".equals(userType)) {
+            intent = new Intent(this, com.roominate.activities.tenant.TenantDashboardActivity.class);
+        } else {
+            intent = new Intent(this, com.roominate.activities.owner.OwnerDashboardActivity.class);
+        }
+
+        intent.putExtra("userType", userType);
+        intent.putExtra("email", email);
+
+        // Clear activity stack so user can't go back to auth flow
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
     }
 }

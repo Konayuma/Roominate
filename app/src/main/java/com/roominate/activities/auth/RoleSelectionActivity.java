@@ -76,7 +76,14 @@ public class RoleSelectionActivity extends AppCompatActivity {
         // Move to Basic Info screen before collecting email
         Intent intent = new Intent(RoleSelectionActivity.this, SignUpBasicInfoActivity.class);
         intent.putExtra("userRole", selectedRole);
-        startActivity(intent);
+        try {
+            startActivity(intent);
+        } catch (android.content.ActivityNotFoundException ex) {
+            // If BasicInfo activity is missing for some reason, fall back to email screen to avoid crash
+            Intent fallback = new Intent(RoleSelectionActivity.this, SignUpEmailActivity.class);
+            fallback.putExtra("userRole", selectedRole);
+            startActivity(fallback);
+        }
         overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
     }
 }

@@ -11,16 +11,18 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import com.roominate.R;
+import com.roominate.services.SupabaseClient;
+import org.json.JSONObject;
 
 public class RegisterActivity extends AppCompatActivity {
 
-    private EditText fullNameEditText;
+    private EditText firstNameEditText;
+    private EditText lastNameEditText;
     private EditText emailEditText;
     private EditText phoneEditText;
-    private EditText passwordEditText;
-    private EditText confirmPasswordEditText;
     private RadioGroup userTypeRadioGroup;
     private RadioButton tenantRadioButton;
     private RadioButton ownerRadioButton;
@@ -31,24 +33,37 @@ public class RegisterActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
+
         // Hide the action bar if it exists
         if (getSupportActionBar() != null) {
             getSupportActionBar().hide();
         }
-        
+
         setContentView(R.layout.activity_register);
 
         initializeViews();
         setupListeners();
+
+        // Pre-fill email if provided
+        String prefilledEmail = getIntent().getStringExtra("email");
+        if (prefilledEmail != null) {
+            emailEditText.setText(prefilledEmail);
+        }
+
+        // Handle back pressed using OnBackPressedDispatcher for compatibility
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                finish(); // Go back to login
+            }
+        });
     }
 
     private void initializeViews() {
-        fullNameEditText = findViewById(R.id.fullNameEditText);
+        firstNameEditText = findViewById(R.id.firstNameEditText);
+        lastNameEditText = findViewById(R.id.lastNameEditText);
         emailEditText = findViewById(R.id.emailEditText);
         phoneEditText = findViewById(R.id.phoneEditText);
-        passwordEditText = findViewById(R.id.passwordEditText);
-        confirmPasswordEditText = findViewById(R.id.confirmPasswordEditText);
         userTypeRadioGroup = findViewById(R.id.userTypeRadioGroup);
         tenantRadioButton = findViewById(R.id.tenantRadioButton);
         ownerRadioButton = findViewById(R.id.ownerRadioButton);
@@ -59,7 +74,6 @@ public class RegisterActivity extends AppCompatActivity {
 
     private void setupListeners() {
         registerButton.setOnClickListener(v -> attemptRegister());
-
         loginTextView.setOnClickListener(v -> {
             finish(); // Go back to login
         });
@@ -67,37 +81,23 @@ public class RegisterActivity extends AppCompatActivity {
 
     private void attemptRegister() {
         // Reset errors
-        fullNameEditText.setError(null);
+        firstNameEditText.setError(null);
+        lastNameEditText.setError(null);
         emailEditText.setError(null);
         phoneEditText.setError(null);
-        passwordEditText.setError(null);
-        confirmPasswordEditText.setError(null);
 
         // Get values
-        String fullName = fullNameEditText.getText().toString().trim();
+        String firstName = firstNameEditText.getText().toString().trim();
+        String lastName = lastNameEditText.getText().toString().trim();
         String email = emailEditText.getText().toString().trim();
         String phone = phoneEditText.getText().toString().trim();
-        String password = passwordEditText.getText().toString().trim();
-        String confirmPassword = confirmPasswordEditText.getText().toString().trim();
-        
+
         int selectedUserTypeId = userTypeRadioGroup.getCheckedRadioButtonId();
         String userType = selectedUserTypeId == tenantRadioButton.getId() ? "tenant" : "owner";
 
         // Validate
         boolean cancel = false;
         View focusView = null;
-
-        if (TextUtils.isEmpty(confirmPassword) || !password.equals(confirmPassword)) {
-            confirmPasswordEditText.setError("Passwords do not match");
-            focusView = confirmPasswordEditText;
-            cancel = true;
-        }
-
-        if (TextUtils.isEmpty(password) || password.length() < 6) {
-            passwordEditText.setError("Password must be at least 6 characters");
-            focusView = passwordEditText;
-            cancel = true;
-        }
 
         if (TextUtils.isEmpty(phone)) {
             phoneEditText.setError("Phone number is required");
@@ -111,9 +111,15 @@ public class RegisterActivity extends AppCompatActivity {
             cancel = true;
         }
 
-        if (TextUtils.isEmpty(fullName)) {
-            fullNameEditText.setError("Full name is required");
-            focusView = fullNameEditText;
+        if (TextUtils.isEmpty(lastName)) {
+            lastNameEditText.setError("Last name is required");
+            focusView = lastNameEditText;
+            cancel = true;
+        }
+
+        if (TextUtils.isEmpty(firstName)) {
+            firstNameEditText.setError("First name is required");
+            focusView = firstNameEditText;
             cancel = true;
         }
 
@@ -127,34 +133,50 @@ public class RegisterActivity extends AppCompatActivity {
                 focusView.requestFocus();
             }
         } else {
-            performRegister(fullName, email, phone, password, userType);
+            performRegister(firstName, lastName, email, phone, userType);
         }
     }
 
-    private void performRegister(String fullName, String email, String phone, 
-                                 String password, String userType) {
+    private void performRegister(String firstName, String lastName, String email,
+                                 String phone, String userType) {
         showProgress(true);
 
-        // TODO: Implement Supabase registration
-        // Example:
-        // AuthRepository.register(fullName, email, phone, password, userType, new AuthCallback() {
-        //     @Override
-        //     public void onSuccess(User user) {
-        //         showProgress(false);
-        //         Toast.makeText(RegisterActivity.this, "Registration successful!", Toast.LENGTH_SHORT).show();
-        //         redirectToDashboard(userType);
-        //     }
-        //
-        //     @Override
-        //     public void onError(String error) {
-        //         showProgress(false);
-        //         Toast.makeText(RegisterActivity.this, error, Toast.LENGTH_SHORT).show();
-        //     }
-        // });
+        try {
+                // Request OTP via Edge Function (Resend) instead of default Supabase signup email
+                SupabaseClient.getInstance().requestOtp(email, new SupabaseClient.ApiCallback() {
+                @Override
+                public void onSuccess(JSONObject response) {
+                    runOnUiThread(() -> {
+                        showProgress(false);
+                        Toast.makeText(RegisterActivity.this,
+                                "Verification code sent — check your email.",
+                            Toast.LENGTH_LONG).show();
 
-        // Temporary simulation
-        Toast.makeText(this, "Registration functionality to be implemented", Toast.LENGTH_SHORT).show();
-        showProgress(false);
+                        // Navigate to email confirmation screen
+                        Intent intent = new Intent(RegisterActivity.this, SignUpEmailVerificationActivity.class);
+                        intent.putExtra("email", email);
+                        intent.putExtra("userRole", userType);
+                        intent.putExtra("firstName", firstName);
+                        intent.putExtra("lastName", lastName);
+                        intent.putExtra("phone", phone);
+                        startActivity(intent);
+                        finish();
+                    });
+                }
+
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        showProgress(false);
+                        Toast.makeText(RegisterActivity.this, "Failed to send verification code: " + error, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+
+        } catch (Exception e) {
+            showProgress(false);
+            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private boolean isEmailValid(String email) {
@@ -164,21 +186,5 @@ public class RegisterActivity extends AppCompatActivity {
     private void showProgress(boolean show) {
         progressBar.setVisibility(show ? View.VISIBLE : View.GONE);
         registerButton.setEnabled(!show);
-    }
-
-    private void redirectToDashboard(String userType) {
-        Intent intent;
-        switch (userType) {
-            case "tenant":
-                // intent = new Intent(this, TenantDashboardActivity.class);
-                break;
-            case "owner":
-                // intent = new Intent(this, OwnerDashboardActivity.class);
-                break;
-            default:
-                return;
-        }
-        // startActivity(intent);
-        // finish();
     }
 }

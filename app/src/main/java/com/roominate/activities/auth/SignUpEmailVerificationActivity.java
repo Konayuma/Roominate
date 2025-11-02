@@ -51,6 +51,9 @@ public class SignUpEmailVerificationActivity extends AppCompatActivity {
         initializeViews();
         setupListeners();
         startResendTimer();
+
+        // Send OTP when activity starts using the recently implemented function
+        sendOtp();
     }
 
     private void initializeViews() {
@@ -70,7 +73,11 @@ public class SignUpEmailVerificationActivity extends AppCompatActivity {
     }
 
     private void setupListeners() {
-        resendText.setOnClickListener(v -> resendCode());
+        resendText.setOnClickListener(v -> {
+            if (resendText.isEnabled()) {
+                sendOtp();
+            }
+        });
 
         // Auto-focus next field with backspace support
         setupCodeInput(code1, null, code2);
@@ -178,79 +185,76 @@ public class SignUpEmailVerificationActivity extends AppCompatActivity {
             return;
         }
 
-        // Show loading
+        // Show progress
         progressBar.setVisibility(View.VISIBLE);
-        Log.d("VerificationActivity", "Progress bar visible, calling SupabaseClient.verifyOtp()");
+        // Disable inputs
+        resendText.setEnabled(false);
 
-        // Call Supabase Edge Function to verify OTP
         SupabaseClient.getInstance().verifyOtp(email, code, new SupabaseClient.ApiCallback() {
             @Override
             public void onSuccess(JSONObject response) {
-                Log.d("VerificationActivity", "✅✅✅ CALLBACK onSuccess() triggered!");
-                Log.d("VerificationActivity", "Response: " + response.toString());
-                
                 runOnUiThread(() -> {
-                    Log.d("VerificationActivity", "Running on UI thread - hiding progress, showing toast");
                     progressBar.setVisibility(View.GONE);
-                    Toast.makeText(SignUpEmailVerificationActivity.this, 
-                        "Email verified successfully!", Toast.LENGTH_SHORT).show();
-                    
-                    // Proceed to password screen
-                    Log.d("VerificationActivity", "Calling proceedToPassword()");
-                    proceedToPassword();
+                    // OTP verified, proceed to password/setup flow
+                    Toast.makeText(SignUpEmailVerificationActivity.this, "Verification successful", Toast.LENGTH_SHORT).show();
+                    proceedToPassword(code);
                 });
             }
-            
+
             @Override
             public void onError(String error) {
-                Log.e("VerificationActivity", "❌❌❌ CALLBACK onError() triggered!");
-                Log.e("VerificationActivity", "Error: " + error);
-                
                 runOnUiThread(() -> {
                     progressBar.setVisibility(View.GONE);
-                    Toast.makeText(SignUpEmailVerificationActivity.this, error, Toast.LENGTH_LONG).show();
-                    
-                    // Clear code fields on error
-                    code1.setText("");
-                    code2.setText("");
-                    code3.setText("");
-                    code4.setText("");
-                    code5.setText("");
-                    code6.setText("");
-                    code1.requestFocus();
+                    resendText.setEnabled(true);
+                    Toast.makeText(SignUpEmailVerificationActivity.this, "Verification failed: " + error, Toast.LENGTH_LONG).show();
                 });
             }
         });
-        
-        Log.d("VerificationActivity", "verifyOtp() call completed, waiting for callback...");
     }
 
-    private void resendCode() {
+    private void sendOtp() {
+        if (email == null || email.isEmpty()) {
+            Toast.makeText(this, "Missing email address", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Show progress and disable resend
+        progressBar.setVisibility(View.VISIBLE);
         resendText.setEnabled(false);
-        
-        // Call send-otp again
-        SupabaseClient.getInstance().sendOtp(email, new SupabaseClient.ApiCallback() {
+        resendText.setAlpha(0.5f);
+
+        SupabaseClient.getInstance().requestOtp(email, new SupabaseClient.ApiCallback() {
             @Override
             public void onSuccess(JSONObject response) {
                 runOnUiThread(() -> {
-                    Toast.makeText(SignUpEmailVerificationActivity.this, 
-                        "Verification code resent", Toast.LENGTH_SHORT).show();
+                    progressBar.setVisibility(View.GONE);
+                    Toast.makeText(SignUpEmailVerificationActivity.this, "Verification code sent — check your email.", Toast.LENGTH_LONG).show();
+                    // restart resend timer
+                    if (countDownTimer != null) {
+                        countDownTimer.cancel();
+                    }
                     startResendTimer();
                 });
             }
-            
+
             @Override
             public void onError(String error) {
                 runOnUiThread(() -> {
-                    Toast.makeText(SignUpEmailVerificationActivity.this, 
-                        "Failed to resend code: " + error, Toast.LENGTH_LONG).show();
+                    progressBar.setVisibility(View.GONE);
                     resendText.setEnabled(true);
+                    resendText.setAlpha(1.0f);
+                    Toast.makeText(SignUpEmailVerificationActivity.this, "Failed to send verification code: " + error, Toast.LENGTH_LONG).show();
                 });
             }
         });
     }
 
-    private void proceedToPassword() {
+    private void resendCode() {
+        // This method is kept for backward compatibility but we'll call sendOtp now
+        sendOtp();
+    }
+
+    private void proceedToPassword(String otp) {
         Intent intent = new Intent(this, SignUpPasswordActivity.class);
         intent.putExtra("userRole", userRole);
         intent.putExtra("firstName", firstName);
@@ -258,8 +262,10 @@ public class SignUpEmailVerificationActivity extends AppCompatActivity {
         intent.putExtra("dob", dob);
         intent.putExtra("phone", phone);
         intent.putExtra("email", email);
+        intent.putExtra("otp", otp);
         startActivity(intent);
         overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+        finish();
     }
 
     @Override

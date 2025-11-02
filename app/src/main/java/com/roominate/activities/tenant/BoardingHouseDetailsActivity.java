@@ -1,22 +1,36 @@
 package com.roominate.activities.tenant;
 
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.RatingBar;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
+import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.roominate.R;
 import com.roominate.models.BoardingHouse;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import okhttp3.*;
+import java.io.IOException;
 
 public class BoardingHouseDetailsActivity extends AppCompatActivity {
+    private static final String TAG = "BoardingHouseDetails";
 
     private ViewPager2 imagesViewPager;
+    private MaterialToolbar toolbar;
     private TextView nameTextView;
     private TextView addressTextView;
     private TextView priceTextView;
@@ -28,11 +42,15 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
     private RecyclerView reviewsRecyclerView;
     private Button contactOwnerButton;
     private Button bookNowButton;
-    private ImageButton favoriteButton;
-    private ImageButton shareButton;
+    private FloatingActionButton favoriteButton;
+    private FloatingActionButton shareButton;
 
     private BoardingHouse boardingHouse;
     private String boardingHouseId;
+    private String userId;
+    private boolean isFavorite = false;
+    private String favoriteId = null;
+    private OkHttpClient httpClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,14 +59,28 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
 
         // Get boarding house ID from intent
         boardingHouseId = getIntent().getStringExtra("boarding_house_id");
+        
+        // Initialize HTTP client
+        httpClient = new OkHttpClient();
+        
+        // Load user ID
+        loadUserId();
 
         initializeViews();
+        setupToolbar();
         loadBoardingHouseDetails();
+        checkFavoriteStatus();
         setupListeners();
+    }
+    
+    private void loadUserId() {
+        SharedPreferences prefs = getSharedPreferences("user_session", Context.MODE_PRIVATE);
+        userId = prefs.getString("user_id", null);
     }
 
     private void initializeViews() {
         imagesViewPager = findViewById(R.id.imagesViewPager);
+        toolbar = findViewById(R.id.toolbar);
         nameTextView = findViewById(R.id.nameTextView);
         addressTextView = findViewById(R.id.addressTextView);
         priceTextView = findViewById(R.id.priceTextView);
@@ -62,6 +94,16 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
         bookNowButton = findViewById(R.id.bookNowButton);
         favoriteButton = findViewById(R.id.favoriteButton);
         shareButton = findViewById(R.id.shareButton);
+    }
+
+    private void setupToolbar() {
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setDisplayShowHomeEnabled(true);
+            getSupportActionBar().setDisplayShowTitleEnabled(false);
+        }
+        toolbar.setNavigationOnClickListener(v -> onBackPressed());
     }
 
     private void loadBoardingHouseDetails() {
@@ -112,7 +154,179 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
     }
 
     private void toggleFavorite() {
-        // TODO: Add/remove from favorites
+        if (userId == null || userId.isEmpty()) {
+            Toast.makeText(this, "Please sign in to add favorites", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (boardingHouseId == null || boardingHouseId.isEmpty()) {
+            Toast.makeText(this, "Property information not available", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (isFavorite) {
+            removeFavorite();
+        } else {
+            addFavorite();
+        }
+    }
+    
+    private void checkFavoriteStatus() {
+        if (userId == null || userId.isEmpty() || boardingHouseId == null) {
+            return;
+        }
+        
+        new Thread(() -> {
+            try {
+                String supabaseUrl = com.roominate.BuildConfig.SUPABASE_URL;
+                String supabaseKey = com.roominate.BuildConfig.SUPABASE_ANON_KEY;
+                
+                String url = supabaseUrl + "/rest/v1/favorites?user_id=eq." + userId + "&listing_id=eq." + boardingHouseId;
+                
+                Request request = new Request.Builder()
+                        .url(url)
+                        .get()
+                        .addHeader("apikey", supabaseKey)
+                        .addHeader("Authorization", "Bearer " + supabaseKey)
+                        .build();
+                
+                Response response = httpClient.newCall(request).execute();
+                String responseBody = response.body().string();
+                
+                if (response.isSuccessful()) {
+                    JSONArray favoritesArray = new JSONArray(responseBody);
+                    
+                    if (favoritesArray.length() > 0) {
+                        JSONObject favoriteObj = favoritesArray.getJSONObject(0);
+                        favoriteId = favoriteObj.optString("id");
+                        isFavorite = true;
+                    } else {
+                        isFavorite = false;
+                        favoriteId = null;
+                    }
+                    
+                    new Handler(Looper.getMainLooper()).post(this::updateFavoriteButton);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error checking favorite status", e);
+            }
+        }).start();
+    }
+    
+    private void addFavorite() {
+        favoriteButton.setEnabled(false);
+        
+        new Thread(() -> {
+            try {
+                String supabaseUrl = com.roominate.BuildConfig.SUPABASE_URL;
+                String supabaseKey = com.roominate.BuildConfig.SUPABASE_ANON_KEY;
+                
+                JSONObject requestBody = new JSONObject();
+                requestBody.put("user_id", userId);
+                requestBody.put("listing_id", boardingHouseId);
+                
+                RequestBody body = RequestBody.create(
+                    requestBody.toString(),
+                    MediaType.parse("application/json")
+                );
+                
+                Request request = new Request.Builder()
+                        .url(supabaseUrl + "/rest/v1/favorites")
+                        .post(body)
+                        .addHeader("apikey", supabaseKey)
+                        .addHeader("Authorization", "Bearer " + supabaseKey)
+                        .addHeader("Content-Type", "application/json")
+                        .addHeader("Prefer", "return=representation")
+                        .build();
+                
+                Response response = httpClient.newCall(request).execute();
+                String responseBody = response.body().string();
+                
+                if (response.isSuccessful()) {
+                    JSONArray resultArray = new JSONArray(responseBody);
+                    if (resultArray.length() > 0) {
+                        JSONObject favoriteObj = resultArray.getJSONObject(0);
+                        favoriteId = favoriteObj.optString("id");
+                        isFavorite = true;
+                        
+                        new Handler(Looper.getMainLooper()).post(() -> {
+                            updateFavoriteButton();
+                            Toast.makeText(this, "Added to favorites", Toast.LENGTH_SHORT).show();
+                            favoriteButton.setEnabled(true);
+                        });
+                    }
+                } else {
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        Toast.makeText(this, "Failed to add favorite", Toast.LENGTH_SHORT).show();
+                        favoriteButton.setEnabled(true);
+                    });
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error adding favorite", e);
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    favoriteButton.setEnabled(true);
+                });
+            }
+        }).start();
+    }
+    
+    private void removeFavorite() {
+        if (favoriteId == null) {
+            return;
+        }
+        
+        favoriteButton.setEnabled(false);
+        
+        new Thread(() -> {
+            try {
+                String supabaseUrl = com.roominate.BuildConfig.SUPABASE_URL;
+                String supabaseKey = com.roominate.BuildConfig.SUPABASE_ANON_KEY;
+                
+                String url = supabaseUrl + "/rest/v1/favorites?id=eq." + favoriteId;
+                
+                Request request = new Request.Builder()
+                        .url(url)
+                        .delete()
+                        .addHeader("apikey", supabaseKey)
+                        .addHeader("Authorization", "Bearer " + supabaseKey)
+                        .build();
+                
+                Response response = httpClient.newCall(request).execute();
+                
+                if (response.isSuccessful()) {
+                    isFavorite = false;
+                    favoriteId = null;
+                    
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        updateFavoriteButton();
+                        Toast.makeText(this, "Removed from favorites", Toast.LENGTH_SHORT).show();
+                        favoriteButton.setEnabled(true);
+                    });
+                } else {
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        Toast.makeText(this, "Failed to remove favorite", Toast.LENGTH_SHORT).show();
+                        favoriteButton.setEnabled(true);
+                    });
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error removing favorite", e);
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    favoriteButton.setEnabled(true);
+                });
+            }
+        }).start();
+    }
+    
+    private void updateFavoriteButton() {
+        if (isFavorite) {
+            favoriteButton.setImageResource(R.drawable.ic_heart_filled);
+            favoriteButton.setContentDescription("Remove from favorites");
+        } else {
+            favoriteButton.setImageResource(R.drawable.ic_heart_outline);
+            favoriteButton.setContentDescription("Add to favorites");
+        }
     }
 
     private void shareBoardingHouse() {

@@ -26,7 +26,7 @@ public class SignUpEmailActivity extends AppCompatActivity {
     private TextInputEditText emailEditText;
     private Button continueButton;
     private ProgressBar progressBar;
-    private String userRole, firstName, lastName, dob, phone;
+    private String userRole, firstName, lastName, dob, phone, password;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,6 +45,7 @@ public class SignUpEmailActivity extends AppCompatActivity {
         lastName = getIntent().getStringExtra("lastName");
         dob = getIntent().getStringExtra("dob");
         phone = getIntent().getStringExtra("phone");
+        password = getIntent().getStringExtra("password");
 
         initializeViews();
         setupListeners();
@@ -93,41 +94,66 @@ public class SignUpEmailActivity extends AppCompatActivity {
 
     private void proceedToVerification() {
         String email = emailEditText.getText().toString().trim();
-        
+
+        if (email.isEmpty()) {
+            emailEditText.setError("Email is required");
+            return;
+        }
+
+        if (!isEmailValid(email)) {
+            emailEditText.setError("Please enter a valid email address");
+            return;
+        }
+
         // Show loading
         progressBar.setVisibility(View.VISIBLE);
         continueButton.setEnabled(false);
-        
-        // Send OTP via Supabase Edge Function
-        SupabaseClient.getInstance().sendOtp(email, new SupabaseClient.ApiCallback() {
-            @Override
-            public void onSuccess(JSONObject response) {
-                runOnUiThread(() -> {
-                    progressBar.setVisibility(View.GONE);
-                    continueButton.setEnabled(true);
-                    
-                    // OTP sent successfully, proceed to verification screen
-                    Intent intent = new Intent(SignUpEmailActivity.this, SignUpEmailVerificationActivity.class);
-                    intent.putExtra("userRole", userRole);
-                    intent.putExtra("firstName", firstName);
-                    intent.putExtra("lastName", lastName);
-                    intent.putExtra("dob", dob);
-                    intent.putExtra("phone", phone);
-                    intent.putExtra("email", email);
-                    startActivity(intent);
-                    overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
-                });
+
+        // Use a dummy password for initial signup - will be updated after confirmation
+        String dummyPassword = "TempPass123!";
+
+        SupabaseClient.getInstance().signUp(
+            firstName != null ? firstName : "",
+            lastName != null ? lastName : "",
+            email,
+            phone != null ? phone : "",
+            dummyPassword,
+            userRole != null ? userRole : "tenant",
+            new SupabaseClient.ApiCallback() {
+                @Override
+                public void onSuccess(JSONObject response) {
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        continueButton.setEnabled(true);
+                        Toast.makeText(SignUpEmailActivity.this,
+                            "Confirmation code sent! Please check your email.", Toast.LENGTH_LONG).show();
+
+                        Intent intent = new Intent(SignUpEmailActivity.this, SignUpEmailVerificationActivity.class);
+                        intent.putExtra("email", email);
+                        intent.putExtra("userRole", userRole);
+                        intent.putExtra("firstName", firstName);
+                        intent.putExtra("lastName", lastName);
+                        intent.putExtra("phone", phone);
+                        intent.putExtra("dummyPassword", dummyPassword);
+                        startActivity(intent);
+                        finish();
+                    });
+                }
+
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        continueButton.setEnabled(true);
+                        Toast.makeText(SignUpEmailActivity.this, "Sign up failed: " + error, Toast.LENGTH_LONG).show();
+                    });
+                }
             }
-            
-            @Override
-            public void onError(String error) {
-                runOnUiThread(() -> {
-                    progressBar.setVisibility(View.GONE);
-                    continueButton.setEnabled(true);
-                    Toast.makeText(SignUpEmailActivity.this, error, Toast.LENGTH_LONG).show();
-                });
-            }
-        });
+        );
+    }
+
+    private boolean isEmailValid(String email) {
+        return email.contains("@") && email.contains(".");
     }
 
     @Override

@@ -183,14 +183,14 @@ public class SignUpBasicInfoActivity extends AppCompatActivity {
     }
 
     private void proceedToEmailScreen() {
-        Intent intent = new Intent(this, SignUpEmailActivity.class);
-        intent.putExtra("userRole", userRole);
-        intent.putExtra("firstName", firstNameEditText.getText().toString().trim());
-        intent.putExtra("lastName", lastNameEditText.getText().toString().trim());
-        intent.putExtra("dob", dobEditText.getText().toString().trim());
-        intent.putExtra("phone", phoneEditText.getText().toString().trim());
-        startActivity(intent);
-        overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
+    Intent intent = new Intent(this, SignUpEmailActivity.class);
+    intent.putExtra("userRole", userRole);
+    intent.putExtra("firstName", firstNameEditText.getText().toString().trim());
+    intent.putExtra("lastName", lastNameEditText.getText().toString().trim());
+    intent.putExtra("dob", dobEditText.getText().toString().trim());
+    intent.putExtra("phone", phoneEditText.getText().toString().trim());
+    startActivity(intent);
+    overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
     }
 
     @Override

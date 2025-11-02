@@ -105,18 +105,50 @@ serve(async (req) => {
       )
     }
 
-    // OTP is valid - mark as used
-    const { error: updateError } = await supabase
-      .from('email_otps')
-      .update({ used: true })
-      .eq('id', record.id)
+    // OTP is valid - mark as used (write used=true and used_at). We'll attempt the update and retry once
+    const usedPayload = { used: true, used_at: new Date().toISOString() }
+    let updatedRow: any = null
+    let updateError: any = null
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const { data: updatedData, error } = await supabase
+        .from('email_otps')
+        .update(usedPayload)
+        .eq('id', record.id)
+        .select('*')
+        .maybeSingle()
+
+      updateError = error
+      updatedRow = updatedData
+
+      if (!updateError) break
+      console.warn('Update attempt', attempt + 1, 'failed:', updateError)
+    }
 
     if (updateError) {
-      console.error('Update error:', updateError)
-      return new Response(
-        JSON.stringify({ error: 'Verification failed' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      console.error('Update error after retries:', updateError)
+      // Do a final check to see if the row is already marked used (to avoid false negatives)
+      try {
+        const { data: checkRows, error: checkErr } = await supabase
+          .from('email_otps')
+          .select('used')
+          .eq('id', record.id)
+          .maybeSingle()
+
+        if (checkErr || !checkRows || checkRows.used !== true) {
+          return new Response(
+            JSON.stringify({ error: 'Verification failed' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+        // If checkRows.used is true, proceed
+      } catch (err) {
+        console.error('Final check failed:', err)
+        return new Response(
+          JSON.stringify({ error: 'Verification failed' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     }
 
     // Optional: Create or update user in auth.users

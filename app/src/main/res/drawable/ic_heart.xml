@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Simple heart icon -->
+    <path
+        android:fillColor="#FFDD2E44"
+        android:pathData="M12 21s-7.5-4.9-9.2-7.1C1.8 11.6 3 8 6.2 6.7 8 5.9 10 6 12 7.7c2-1.7 4-1.8 5.8-1 3.2 1.3 4.4 4.9 3.4 7.2C19.5 16.1 12 21 12 21z"/>
+</vector>
