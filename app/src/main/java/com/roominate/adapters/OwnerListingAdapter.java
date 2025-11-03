@@ -9,12 +9,12 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
-import com.bumptech.glide.Glide;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.Chip;
 import com.roominate.R;
 import com.roominate.activities.owner.AddListingActivity;
 import com.roominate.models.Property;
+import com.squareup.picasso.Picasso;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -44,12 +44,14 @@ public class OwnerListingAdapter extends RecyclerView.Adapter<OwnerListingAdapte
         holder.priceTextView.setText(String.format(Locale.getDefault(), "$%.0f / mo", property.getMonthlyRate()));
         holder.statusChip.setText(property.getStatus());
 
-        // Load image using Glide
+        // Load image using Picasso
         if (property.getImageUrls() != null && !property.getImageUrls().isEmpty()) {
-            Glide.with(context)
+            Picasso.get()
                     .load(property.getImageUrls().get(0))
                     .placeholder(R.drawable.ic_house_placeholder)
                     .error(R.drawable.ic_house_placeholder)
+                    .fit()
+                    .centerCrop()
                     .into(holder.propertyImageView);
         } else {
             holder.propertyImageView.setImageResource(R.drawable.ic_house_placeholder);

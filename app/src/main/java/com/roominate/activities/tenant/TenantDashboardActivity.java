@@ -15,11 +15,13 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.fragment.app.Fragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.navigation.NavigationView;
-import com.roominate.ui.fragments.HomeFragment;
+import com.roominate.R;
+import com.roominate.activities.auth.LoginActivity;
+import com.roominate.services.SupabaseClient;
+import com.roominate.ui.fragments.SearchFragment;
 import com.roominate.ui.fragments.MyBookingsFragment;
 import com.roominate.ui.fragments.ProfileFragment;
-import com.roominate.ui.fragments.SearchFragment;
-import com.roominate.ui.fragments.FavoritesFragment;
+import org.json.JSONObject;
 
 public class TenantDashboardActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
@@ -61,8 +63,40 @@ public class TenantDashboardActivity extends AppCompatActivity implements Naviga
         profileNameTextView = headerView.findViewById(R.id.profileName);
         profileEmailTextView = headerView.findViewById(R.id.profileEmail);
         
+        // Check if owner is using tenant view
+        checkIfOwnerUsingTenantView();
+        
         // Load user data into header
         loadUserProfile();
+    }
+    
+    private void checkIfOwnerUsingTenantView() {
+        try {
+            SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
+            
+            // Check if user is owner
+            String userJson = prefs.getString("user_data", null);
+            boolean isOwner = false;
+            
+            if (userJson != null) {
+                JSONObject user = new JSONObject(userJson);
+                JSONObject userMetadata = user.optJSONObject("user_metadata");
+                if (userMetadata != null) {
+                    String role = userMetadata.optString("role", "tenant");
+                    isOwner = "owner".equalsIgnoreCase(role);
+                }
+            }
+            
+            // Show "Switch to Owner View" menu item if user is owner
+            if (isOwner) {
+                MenuItem switchItem = navigationView.getMenu().findItem(R.id.nav_switch_to_owner);
+                if (switchItem != null) {
+                    switchItem.setVisible(true);
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error checking owner status", e);
+        }
     }
     
     private void loadUserProfile() {
@@ -206,12 +240,26 @@ public class TenantDashboardActivity extends AppCompatActivity implements Naviga
         } else if (id == R.id.nav_settings) {
             Intent intent = new Intent(this, SettingsActivity.class);
             startActivity(intent);
+        } else if (id == R.id.nav_switch_to_owner) {
+            switchToOwnerView();
         } else if (id == R.id.nav_sign_out) {
             signOut();
         }
 
         drawerLayout.closeDrawer(GravityCompat.START);
         return true;
+    }
+    
+    private void switchToOwnerView() {
+        // Clear tenant view preference
+        SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
+        prefs.edit().remove("owner_using_tenant_view").apply();
+        
+        // Navigate back to owner dashboard
+        Intent intent = new Intent(this, com.roominate.activities.owner.OwnerDashboardActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
     }
 
     private void signOut() {
@@ -228,14 +276,21 @@ public class TenantDashboardActivity extends AppCompatActivity implements Naviga
             }
         });
         
-        // Clear local session data
+        // Clear local session data including login persistence
         try {
             SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
             prefs.edit()
+                .remove("is_logged_in")
+                .remove("user_id")
+                .remove("user_email")
+                .remove("user_role")
+                .remove("user_data")
                 .remove("last_signed_email")
                 .remove("last_otp_email")
                 .remove("access_token")
                 .remove("refresh_token")
+                .remove("token_expires_at")
+                .remove("owner_using_tenant_view")
                 .apply();
         } catch (Exception e) {
             Log.e(TAG, "Error clearing session", e);

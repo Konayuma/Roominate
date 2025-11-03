@@ -1,6 +1,5 @@
-package com.roominate.activities.tenant;
+package com.roominate.activities.owner;
 
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
@@ -8,12 +7,13 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.roominate.BuildConfig;
@@ -24,6 +24,8 @@ import com.roominate.models.Property;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -32,54 +34,84 @@ import okhttp3.Response;
 
 import static android.content.Context.MODE_PRIVATE;
 
-import java.util.ArrayList;
-import java.util.List;
+public class MyListingsFragment extends Fragment {
 
-public class HomeFragment extends Fragment {
-
-    private static final String TAG = "HomeFragment";
+    private static final String TAG = "MyListingsFragment";
     private RecyclerView recyclerView;
     private PropertyAdapter adapter;
     private List<Property> properties = new ArrayList<>();
     private ImageButton menuButton;
+    private TextView emptyStateText;
+    private String currentUserId;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        View v = inflater.inflate(R.layout.fragment_home, container, false);
+        View v = inflater.inflate(R.layout.fragment_my_listings, container, false);
         
-        recyclerView = v.findViewById(R.id.recyclerViewHouses);
-        recyclerView.setLayoutManager(new GridLayoutManager(getContext(), 2));
+        recyclerView = v.findViewById(R.id.recyclerViewProperties);
+        emptyStateText = v.findViewById(R.id.emptyStateText);
+        recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         
         menuButton = v.findViewById(R.id.menuButton);
         menuButton.setOnClickListener(view -> {
-            // Open drawer from parent activity
-            if (getActivity() instanceof TenantDashboardActivity) {
-                ((TenantDashboardActivity) getActivity()).openDrawer();
+            if (getActivity() instanceof OwnerDashboardActivity) {
+                ((OwnerDashboardActivity) getActivity()).openDrawer();
             }
         });
 
-        // Initialize adapter before loading data
+        // Initialize adapter FIRST before loading data
         adapter = new PropertyAdapter(getContext(), properties, property -> {
-            Intent i = new Intent(getActivity(), BoardingHouseDetailsActivity.class);
-            // BoardingHouseDetailsActivity expects the extra key "boarding_house_id"
-            i.putExtra("boarding_house_id", property.getId());
-            startActivity(i);
+            // TODO: Navigate to edit property
         });
         recyclerView.setAdapter(adapter);
         
-        // Load available properties from Supabase
-        loadAvailableProperties();
+        // Load current user ID from SharedPreferences
+        loadUserData();
+        
+        // Load listings from Supabase
+        loadListings();
 
         return v;
     }
 
-    private void loadAvailableProperties() {
-        // Get SharedPreferences BEFORE starting background thread
+    private void loadUserData() {
+        SharedPreferences prefs = getActivity().getSharedPreferences("roominate_prefs", MODE_PRIVATE);
+        String userDataJson = prefs.getString("user_data", null);
+        
+        Log.d(TAG, "Raw user_data from SharedPreferences: " + userDataJson);
+        
+        if (userDataJson != null) {
+            try {
+                JSONObject userData = new JSONObject(userDataJson);
+                currentUserId = userData.optString("id", null);
+                Log.d(TAG, "Loaded owner user ID: " + currentUserId);
+                Log.d(TAG, "User email: " + userData.optString("email", "N/A"));
+            } catch (Exception e) {
+                Log.e(TAG, "Error loading user data", e);
+            }
+        }
+        
+        if (currentUserId == null) {
+            Log.w(TAG, "No user ID found in SharedPreferences");
+            // Try to get access token as fallback
+            String accessToken = prefs.getString("access_token", null);
+            Log.d(TAG, "Access token present: " + (accessToken != null));
+        }
+    }
+
+    private void loadListings() {
+        if (currentUserId == null) {
+            Log.w(TAG, "Cannot load listings: user ID is null");
+            updateEmptyState();
+            return;
+        }
+        
+        // Get SharedPreferences BEFORE starting background thread to avoid NPE
         final SharedPreferences prefs = requireActivity().getSharedPreferences("roominate_prefs", MODE_PRIVATE);
         final String accessToken = prefs.getString("access_token", null);
         
-        // Fetch available properties from Supabase in background thread
+        // Fetch listings from Supabase in background thread
         new Thread(() -> {
             try {
                 OkHttpClient client = new OkHttpClient.Builder()
@@ -87,10 +119,11 @@ public class HomeFragment extends Fragment {
                     .readTimeout(30, TimeUnit.SECONDS)
                     .build();
                 
-                Log.d(TAG, "Loading available properties for tenant...");
+                Log.d(TAG, "Using access token: " + (accessToken != null ? "YES (length=" + accessToken.length() + ")" : "NO"));
+                Log.d(TAG, "Querying for owner_id: " + currentUserId);
                 
-                // Query boarding_houses where available=true (public listings)
-                String url = BuildConfig.SUPABASE_URL + "/rest/v1/boarding_houses?available=eq.true&status=eq.active&select=*";
+                // Query boarding_houses where owner_id matches current user
+                String url = BuildConfig.SUPABASE_URL + "/rest/v1/boarding_houses?owner_id=eq." + currentUserId + "&select=*";
                 Log.d(TAG, "Query URL: " + url);
                 
                 Request.Builder requestBuilder = new Request.Builder()
@@ -101,10 +134,10 @@ public class HomeFragment extends Fragment {
                 // Use access token if available for authenticated RLS
                 if (accessToken != null && !accessToken.isEmpty()) {
                     requestBuilder.addHeader("Authorization", "Bearer " + accessToken);
-                    Log.d(TAG, "Using authenticated request");
+                    Log.d(TAG, "Using authenticated request with access token");
                 } else {
                     requestBuilder.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
-                    Log.d(TAG, "Using anon key");
+                    Log.w(TAG, "Using anon key - RLS may block results");
                 }
                 
                 Request request = requestBuilder.build();
@@ -114,10 +147,10 @@ public class HomeFragment extends Fragment {
                 
                 if (response.isSuccessful() && response.body() != null) {
                     String responseBody = response.body().string();
-                    Log.d(TAG, "Properties response: " + responseBody);
+                    Log.d(TAG, "Listings response: " + responseBody);
                     
                     JSONArray jsonArray = new JSONArray(responseBody);
-                    Log.d(TAG, "Found " + jsonArray.length() + " available properties");
+                    Log.d(TAG, "Found " + jsonArray.length() + " listings in response");
                     
                     properties.clear();
                     
@@ -135,17 +168,17 @@ public class HomeFragment extends Fragment {
                         property.setSecurityDeposit(jsonObject.optDouble("security_deposit", 0.0));
                         property.setStatus(jsonObject.optString("status", "draft"));
                         
+                        Log.d(TAG, "Property " + i + ": name=" + property.getName() + ", owner=" + property.getOwnerId());
+                        
                         // Parse images JSONB array
                         if (jsonObject.has("images") && !jsonObject.isNull("images")) {
                             JSONArray imagesArray = jsonObject.optJSONArray("images");
-                            if (imagesArray != null && imagesArray.length() > 0) {
+                            if (imagesArray != null) {
                                 List<String> imageUrls = new ArrayList<>();
                                 for (int j = 0; j < imagesArray.length(); j++) {
                                     imageUrls.add(imagesArray.getString(j));
                                 }
                                 property.setImageUrls(imageUrls);
-                                // Set first image as thumbnail
-                                property.setThumbnailUrl(imageUrls.get(0));
                             }
                         }
                         
@@ -164,30 +197,36 @@ public class HomeFragment extends Fragment {
                         properties.add(property);
                     }
                     
-                    // Update UI on main thread - use isAdded() to check fragment is attached
+                    // Update UI on main thread - check fragment is attached first
                     if (isAdded() && getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
                             Log.d(TAG, "Updating adapter with " + properties.size() + " properties");
+                            Log.d(TAG, "Adapter is null: " + (adapter == null));
+                            Log.d(TAG, "RecyclerView is null: " + (recyclerView == null));
                             
                             if (adapter != null) {
                                 adapter.notifyDataSetChanged();
                                 Log.d(TAG, "Called notifyDataSetChanged()");
                             }
                             
+                            updateEmptyState();
+                            Log.d(TAG, "Loaded " + properties.size() + " properties - UI should be updated");
+                            
                             if (properties.isEmpty()) {
-                                Toast.makeText(getContext(), "No properties available at the moment", Toast.LENGTH_LONG).show();
+                                Toast.makeText(getContext(), "No listings found for your account", Toast.LENGTH_LONG).show();
                             } else {
-                                Toast.makeText(getContext(), "Found " + properties.size() + " property(s)", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(getContext(), "Found " + properties.size() + " listing(s)", Toast.LENGTH_SHORT).show();
                             }
                         });
                     }
                 } else {
                     String errorBody = response.body() != null ? response.body().string() : "Unknown error";
-                    Log.e(TAG, "Failed to load properties: " + response.code() + " - " + errorBody);
+                    Log.e(TAG, "Failed to load listings: " + response.code() + " - " + errorBody);
                     
                     if (isAdded() && getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
-                            Toast.makeText(getContext(), "Failed to load properties", Toast.LENGTH_LONG).show();
+                            Toast.makeText(getContext(), "Failed: " + response.code() + " - Check logcat", Toast.LENGTH_LONG).show();
+                            updateEmptyState();
                         });
                     }
                 }
@@ -195,13 +234,24 @@ public class HomeFragment extends Fragment {
                 response.close();
                 
             } catch (Exception e) {
-                Log.e(TAG, "Error loading properties", e);
+                Log.e(TAG, "Error loading listings", e);
                 if (isAdded() && getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
                         Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        updateEmptyState();
                     });
                 }
             }
         }).start();
+    }
+    
+    private void updateEmptyState() {
+        if (properties.isEmpty()) {
+            recyclerView.setVisibility(View.GONE);
+            emptyStateText.setVisibility(View.VISIBLE);
+        } else {
+            recyclerView.setVisibility(View.VISIBLE);
+            emptyStateText.setVisibility(View.GONE);
+        }
     }
 }

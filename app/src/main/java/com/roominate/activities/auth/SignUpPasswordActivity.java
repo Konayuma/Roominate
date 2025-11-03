@@ -47,10 +47,12 @@ public class SignUpPasswordActivity extends AppCompatActivity {
 
         // Get data from previous screen
         email = getIntent().getStringExtra("email");
-        userType = getIntent().getStringExtra("userType");
+        userType = getIntent().getStringExtra("userRole");
         firstName = getIntent().getStringExtra("firstName");
         lastName = getIntent().getStringExtra("lastName");
         phone = getIntent().getStringExtra("phone");
+        
+        Log.d("SignUpPasswordActivity", "Received user role: " + userType);
         initializeViews();
 
         setupListeners();

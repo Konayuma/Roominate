@@ -4,16 +4,22 @@ import android.app.DatePickerDialog;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.DatePicker;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.roominate.R;
+import com.roominate.services.SupabaseClient;
+import org.json.JSONObject;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.Locale;
 
 public class BookingActivity extends AppCompatActivity {
@@ -29,6 +35,7 @@ public class BookingActivity extends AppCompatActivity {
     private TextView totalAmountTextView;
     private EditText notesEditText;
     private Button submitBookingButton;
+    private ProgressBar progressBar;
 
     private String boardingHouseId;
     private double monthlyRate = 0;
@@ -72,6 +79,7 @@ public class BookingActivity extends AppCompatActivity {
         totalAmountTextView = findViewById(R.id.totalAmountTextView);
         notesEditText = findViewById(R.id.notesEditText);
         submitBookingButton = findViewById(R.id.submitBookingButton);
+        progressBar = findViewById(R.id.progressBar);
     }
 
     private void loadBoardingHouseInfo() {
@@ -149,7 +157,67 @@ public class BookingActivity extends AppCompatActivity {
             return;
         }
 
-        // TODO: Validate and submit booking to Supabase
-        Toast.makeText(this, "Booking functionality to be implemented", Toast.LENGTH_SHORT).show();
+        // Get form data
+        String moveInDate = moveInDateEditText.getText().toString().trim();
+        int months = Integer.parseInt(durationEditText.getText().toString().trim());
+        
+        // Calculate end date based on move-in date and duration
+        String endDate = calculateEndDate(moveInDate, months);
+        
+        // Get total amount
+        double totalAmount = calculateTotal();
+        
+        // Show progress
+        progressBar.setVisibility(View.VISIBLE);
+        submitBookingButton.setEnabled(false);
+        
+        // Submit booking to Supabase
+        SupabaseClient.getInstance(this).createBooking(
+            boardingHouseId,
+            moveInDate,
+            endDate,
+            totalAmount,
+            new SupabaseClient.ApiCallback() {
+                @Override
+                public void onSuccess(JSONObject response) {
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        submitBookingButton.setEnabled(true);
+                        Toast.makeText(BookingActivity.this, 
+                            "Booking request submitted successfully!", 
+                            Toast.LENGTH_LONG).show();
+                        
+                        // Return to previous activity
+                        setResult(RESULT_OK);
+                        finish();
+                    });
+                }
+
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        progressBar.setVisibility(View.GONE);
+                        submitBookingButton.setEnabled(true);
+                        Toast.makeText(BookingActivity.this, 
+                            "Failed to submit booking: " + error, 
+                            Toast.LENGTH_LONG).show();
+                    });
+                }
+            }
+        );
+    }
+    
+    private String calculateEndDate(String startDate, int months) {
+        try {
+            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+            Date date = format.parse(startDate);
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTime(date);
+            calendar.add(Calendar.MONTH, months);
+            return format.format(calendar.getTime());
+        } catch (Exception e) {
+            Log.e("BookingActivity", "Error calculating end date", e);
+            return startDate; // Fallback to start date
+        }
     }
 }

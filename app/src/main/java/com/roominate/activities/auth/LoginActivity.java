@@ -1,6 +1,7 @@
 package com.roominate.activities.auth;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
@@ -36,6 +37,13 @@ public class LoginActivity extends AppCompatActivity {
         
         setContentView(R.layout.activity_login);
 
+        // Ensure SupabaseClient has an application context for SharedPreferences access
+        try {
+            com.roominate.services.SupabaseClient.init(getApplicationContext());
+        } catch (Exception e) {
+            android.util.Log.w("LoginActivity", "Failed to init SupabaseClient context", e);
+        }
+
         initializeViews();
         setupListeners();
     }
@@ -62,7 +70,8 @@ public class LoginActivity extends AppCompatActivity {
         loginButton.setOnClickListener(v -> attemptLogin());
 
         registerTextView.setOnClickListener(v -> {
-            Intent intent = new Intent(LoginActivity.this, RegisterActivity.class);
+            // Route to RoleSelectionActivity - the defined auth flow entry point
+            Intent intent = new Intent(LoginActivity.this, RoleSelectionActivity.class);
             startActivity(intent);
         });
 
@@ -115,21 +124,68 @@ public class LoginActivity extends AppCompatActivity {
             public void onSuccess(JSONObject response) {
                 Log.d("LoginActivity", "signIn success: " + response.toString());
 
-                // Store user data from sign-in response for later use
+                // Store session data for persistence
+                String roleFromAuth = null;
+                String accessToken = null;
+                String refreshToken = null;
+                long expiresAt = 0;
+                
                 try {
+                    // Extract session tokens
+                    if (response.has("access_token")) {
+                        accessToken = response.getString("access_token");
+                    }
+                    if (response.has("refresh_token")) {
+                        refreshToken = response.getString("refresh_token");
+                    }
+                    if (response.has("expires_at")) {
+                        expiresAt = response.getLong("expires_at");
+                    } else if (response.has("expires_in")) {
+                        // Calculate expires_at from expires_in
+                        long expiresIn = response.getLong("expires_in");
+                        expiresAt = System.currentTimeMillis() / 1000 + expiresIn;
+                    }
+                    
                     if (response.has("user")) {
                         JSONObject user = response.getJSONObject("user");
                         android.content.SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
-                        prefs.edit()
-                            .putString("user_data", user.toString())
-                            .putString("last_signed_email", email)
-                            .apply();
+                        SharedPreferences.Editor editor = prefs.edit();
+                        
+                        // Store user data
+                        editor.putString("user_data", user.toString())
+                              .putString("user_id", user.optString("id", ""))
+                              .putString("user_email", email)
+                              .putString("last_signed_email", email);
+                        
+                        // Store session tokens
+                        if (accessToken != null) {
+                            editor.putString("access_token", accessToken);
+                        }
+                        if (refreshToken != null) {
+                            editor.putString("refresh_token", refreshToken);
+                        }
+                        if (expiresAt > 0) {
+                            editor.putLong("token_expires_at", expiresAt);
+                        }
+                        
+                        // Mark as logged in
+                        editor.putBoolean("is_logged_in", true);
+                        editor.apply();
+                        
+                        // Try to get role from user_metadata first (most reliable)
+                        if (user.has("user_metadata")) {
+                            JSONObject userMetadata = user.getJSONObject("user_metadata");
+                            roleFromAuth = userMetadata.optString("role", null);
+                            Log.d("LoginActivity", "Role from user_metadata: " + roleFromAuth);
+                        }
                     }
                 } catch (Exception e) {
                     Log.e("LoginActivity", "Error storing user data", e);
                 }
 
-                // Get user profile to determine role
+                final String finalRoleFromAuth = roleFromAuth;
+
+                // Get user profile to determine role (fallback if not in user_metadata)
                 SupabaseClient.getInstance().getUserProfile(new SupabaseClient.ApiCallback() {
                     @Override
                     public void onSuccess(JSONObject profileResponse) {
@@ -138,11 +194,22 @@ public class LoginActivity extends AppCompatActivity {
                             Toast.makeText(LoginActivity.this, "Login successful!", Toast.LENGTH_SHORT).show();
 
                             try {
-                                String role = profileResponse.optString("role", "tenant");
+                                // Prefer role from user_metadata, fallback to profile table
+                                String role = finalRoleFromAuth != null ? finalRoleFromAuth : profileResponse.optString("role", "tenant");
+                                Log.d("LoginActivity", "Final role determined: " + role);
+                                
+                                // Store the final role in SharedPreferences
+                                SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
+                                prefs.edit().putString("user_role", role).apply();
+                                
                                 redirectToDashboard(role);
                             } catch (Exception e) {
                                 Log.e("LoginActivity", "Error parsing user role", e);
-                                redirectToDashboard("tenant"); // Default fallback
+                                // Use auth role if we have it, otherwise default to tenant
+                                String fallbackRole = finalRoleFromAuth != null ? finalRoleFromAuth : "tenant";
+                                SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
+                                prefs.edit().putString("user_role", fallbackRole).apply();
+                                redirectToDashboard(fallbackRole);
                             }
                         });
                     }
@@ -152,8 +219,13 @@ public class LoginActivity extends AppCompatActivity {
                         Log.e("LoginActivity", "Error getting user profile: " + error);
                         runOnUiThread(() -> {
                             showProgress(false);
-                            Toast.makeText(LoginActivity.this, "Login successful, but failed to load profile", Toast.LENGTH_SHORT).show();
-                            redirectToDashboard("tenant"); // Default fallback
+                            Toast.makeText(LoginActivity.this, "Login successful!", Toast.LENGTH_SHORT).show();
+                            // Use role from auth if available, otherwise default to tenant
+                            String fallbackRole = finalRoleFromAuth != null ? finalRoleFromAuth : "tenant";
+                            Log.d("LoginActivity", "Using fallback role: " + fallbackRole);
+                            SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
+                            prefs.edit().putString("user_role", fallbackRole).apply();
+                            redirectToDashboard(fallbackRole);
                         });
                     }
                 });
@@ -180,21 +252,33 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void redirectToDashboard(String userType) {
+        // Check if owner is using tenant view
+        SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
+        boolean ownerUsingTenantView = prefs.getBoolean("owner_using_tenant_view", false);
+        
         Intent intent;
-        switch (userType.toLowerCase()) {
-            case "tenant":
-                intent = new Intent(this, com.roominate.activities.tenant.TenantDashboardActivity.class);
-                break;
-            case "owner":
-                intent = new Intent(this, com.roominate.activities.owner.OwnerDashboardActivity.class);
-                break;
-            case "admin":
-                intent = new Intent(this, com.roominate.activities.admin.AdminDashboardActivity.class);
-                break;
-            default:
-                intent = new Intent(this, com.roominate.activities.tenant.TenantDashboardActivity.class);
-                break;
+        
+        // If owner is using tenant view, route to tenant dashboard regardless
+        if ("owner".equalsIgnoreCase(userType) && ownerUsingTenantView) {
+            intent = new Intent(this, com.roominate.activities.tenant.TenantDashboardActivity.class);
+        } else {
+            // Normal routing based on user type
+            switch (userType.toLowerCase()) {
+                case "tenant":
+                    intent = new Intent(this, com.roominate.activities.tenant.TenantDashboardActivity.class);
+                    break;
+                case "owner":
+                    intent = new Intent(this, com.roominate.activities.owner.OwnerDashboardActivity.class);
+                    break;
+                case "admin":
+                    intent = new Intent(this, com.roominate.activities.admin.AdminDashboardActivity.class);
+                    break;
+                default:
+                    intent = new Intent(this, com.roominate.activities.tenant.TenantDashboardActivity.class);
+                    break;
+            }
         }
+        
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();

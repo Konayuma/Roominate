@@ -1,162 +1,516 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/white">
 
+    <!-- Top Bar: Back Button + Title -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
-
-        <EditText
-            android:id="@+id/nameEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Property Name" />
-
-        <EditText
-            android:id="@+id/descriptionEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Description"
-            android:inputType="textMultiLine"
-            android:lines="3"
-            android:layout_marginTop="8dp" />
-
-        <EditText
-            android:id="@+id/addressEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Address"
-            android:layout_marginTop="8dp" />
-
-        <EditText
-            android:id="@+id/cityEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="City"
-            android:layout_marginTop="8dp" />
-
-        <EditText
-            android:id="@+id/provinceEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Province"
-            android:layout_marginTop="8dp" />
-
-        <EditText
-            android:id="@+id/priceEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Price per Month"
-            android:inputType="numberDecimal"
-            android:layout_marginTop="8dp" />
-
-        <EditText
-            android:id="@+id/depositEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Security Deposit"
-            android:inputType="numberDecimal"
-            android:layout_marginTop="8dp" />
-
-        <EditText
-            android:id="@+id/totalRoomsEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Total Rooms"
-            android:inputType="number"
-            android:layout_marginTop="8dp" />
-
-        <EditText
-            android:id="@+id/availableRoomsEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Available Rooms"
-            android:inputType="number"
-            android:layout_marginTop="8dp" />
-
-        <EditText
-            android:id="@+id/contactPersonEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Contact Person"
-            android:layout_marginTop="8dp" />
-
-        <EditText
-            android:id="@+id/contactPhoneEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Contact Phone"
-            android:inputType="phone"
-            android:layout_marginTop="8dp" />
-
-        <Spinner
-            android:id="@+id/roomTypeSpinner"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
-
-        <CheckBox
-            android:id="@+id/furnishedCheckBox"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Furnished"
-            android:layout_marginTop="8dp" />
-
-        <CheckBox
-            android:id="@+id/privateBathroomCheckBox"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Private Bathroom" />
-
-        <CheckBox
-            android:id="@+id/electricityIncludedCheckBox"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Electricity Included" />
-
-        <CheckBox
-            android:id="@+id/waterIncludedCheckBox"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Water Included" />
-
-        <CheckBox
-            android:id="@+id/internetIncludedCheckBox"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Internet Included" />
-
-        <com.google.android.material.chip.ChipGroup
-            android:id="@+id/amenitiesChipGroup"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/imagesRecyclerView"
-            android:layout_width="match_parent"
-            android:layout_height="150dp"
-            android:layout_marginTop="16dp" />
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingHorizontal="16dp"
+        android:background="@color/white"
+        android:elevation="4dp">
 
         <ImageButton
-            android:id="@+id/addImageButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:src="@android:drawable/ic_menu_camera"
-            android:contentDescription="Add Image"
-            android:layout_marginTop="8dp" />
+            android:id="@+id/backButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackground"
+            android:src="@drawable/ic_back"
+            android:contentDescription="Back"
+            android:scaleType="centerInside" />
 
-        <Button
-            android:id="@+id/submitButton"
-            android:layout_width="match_parent"
+        <TextView
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Submit Property"
-            android:layout_marginTop="16dp" />
+            android:layout_weight="1"
+            android:text="Add Property"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="@color/black"
+            android:paddingStart="16dp" />
 
     </LinearLayout>
 
-</ScrollView>
+    <!-- Scrollable Content -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- Basic Information Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Basic Information"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorPrimary"
+                android:layout_marginBottom="12dp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:boxBackgroundMode="outline"
+                app:boxBackgroundColor="@android:color/transparent"
+                app:boxStrokeColor="@color/colorPrimary"
+                app:boxStrokeWidthFocused="2dp"
+                app:hintTextColor="#666666"
+                app:placeholderTextColor="#999999"
+                android:textColorHint="#999999"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+        <EditText
+            android:textColor="#000000"
+                    android:id="@+id/nameEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Property Name"
+                    android:inputType="text" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:boxBackgroundMode="outline"
+                app:boxBackgroundColor="@android:color/transparent"
+                app:boxStrokeColor="@color/colorPrimary"
+                app:boxStrokeWidthFocused="2dp"
+                app:hintTextColor="#666666"
+                app:placeholderTextColor="#999999"
+                android:textColorHint="#999999"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+        <EditText
+            android:textColor="#000000"
+                    android:id="@+id/descriptionEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Description"
+                    android:inputType="textMultiLine"
+                    android:lines="3"
+                    android:gravity="top" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Location Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Location"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorPrimary"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:boxBackgroundMode="outline"
+                app:boxBackgroundColor="@android:color/transparent"
+                app:boxStrokeColor="@color/colorPrimary"
+                app:boxStrokeWidthFocused="2dp"
+                app:hintTextColor="#666666"
+                app:placeholderTextColor="#999999"
+                android:textColorHint="#999999"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <EditText
+                        android:textColor="#000000"
+                    android:id="@+id/addressEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Street Address"
+                    android:inputType="text" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="12dp">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    app:boxBackgroundMode="outline"
+                    app:boxBackgroundColor="@android:color/transparent"
+                    app:boxStrokeColor="@color/colorPrimary"
+                    app:boxStrokeWidthFocused="2dp"
+                    app:hintTextColor="#666666"
+                    app:placeholderTextColor="#999999"
+                    android:textColorHint="#999999"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <EditText
+                        android:textColor="#000000"
+                        android:id="@+id/cityEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="City"
+                        android:inputType="text" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    app:boxBackgroundMode="outline"
+                    app:boxBackgroundColor="@android:color/transparent"
+                    app:boxStrokeColor="@color/colorPrimary"
+                    app:boxStrokeWidthFocused="2dp"
+                    app:hintTextColor="#666666"
+                    app:placeholderTextColor="#999999"
+                    android:textColorHint="#999999"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <EditText
+                        android:textColor="#000000"
+                        android:id="@+id/provinceEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Province"
+                        android:inputType="text" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+
+            <!-- Pricing Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Pricing"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorPrimary"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="12dp">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    app:boxBackgroundMode="outline"
+                    app:boxBackgroundColor="@android:color/transparent"
+                    app:boxStrokeColor="@color/colorPrimary"
+                    app:boxStrokeWidthFocused="2dp"
+                    app:hintTextColor="#666666"
+                    app:placeholderTextColor="#999999"
+                    android:textColorHint="#999999"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <EditText
+                        android:textColor="#000000"
+                        android:id="@+id/priceEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Monthly Rate"
+                        android:inputType="numberDecimal" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    app:boxBackgroundMode="outline"
+                    app:boxBackgroundColor="@android:color/transparent"
+                    app:boxStrokeColor="@color/colorPrimary"
+                    app:boxStrokeWidthFocused="2dp"
+                    app:hintTextColor="#666666"
+                    app:placeholderTextColor="#999999"
+                    android:textColorHint="#999999"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <EditText
+                        android:textColor="#000000"
+                        android:id="@+id/depositEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Deposit"
+                        android:inputType="numberDecimal" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+
+            <!-- Room Details Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Room Details"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorPrimary"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="12dp">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    app:boxBackgroundMode="outline"
+                    app:boxBackgroundColor="@android:color/transparent"
+                    app:boxStrokeColor="@color/colorPrimary"
+                    app:boxStrokeWidthFocused="2dp"
+                    app:hintTextColor="#666666"
+                    app:placeholderTextColor="#999999"
+                    android:textColorHint="#999999"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <EditText
+                        android:textColor="#000000"
+                        android:id="@+id/totalRoomsEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Total Rooms"
+                        android:inputType="number" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    app:boxBackgroundMode="outline"
+                    app:boxBackgroundColor="@android:color/transparent"
+                    app:boxStrokeColor="@color/colorPrimary"
+                    app:boxStrokeWidthFocused="2dp"
+                    app:hintTextColor="#666666"
+                    app:placeholderTextColor="#999999"
+                    android:textColorHint="#999999"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <EditText
+                        android:textColor="#000000"
+                        android:id="@+id/availableRoomsEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Available"
+                        android:inputType="number" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:boxBackgroundMode="outline"
+                app:boxBackgroundColor="@android:color/transparent"
+                app:boxStrokeColor="@color/colorPrimary"
+                app:boxStrokeWidthFocused="2dp"
+                app:hintTextColor="#666666"
+                app:placeholderTextColor="#999999"
+                android:textColorHint="#999999"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                <Spinner
+                    android:id="@+id/roomTypeSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Contact Information Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Contact Information"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorPrimary"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:boxBackgroundMode="outline"
+                app:boxBackgroundColor="@android:color/transparent"
+                app:boxStrokeColor="@color/colorPrimary"
+                app:boxStrokeWidthFocused="2dp"
+                app:hintTextColor="#666666"
+                app:placeholderTextColor="#999999"
+                android:textColorHint="#999999"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+        <EditText
+            android:textColor="#000000"
+                    android:id="@+id/contactPersonEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Contact Person"
+                    android:inputType="text" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:boxBackgroundMode="outline"
+                app:boxBackgroundColor="@android:color/transparent"
+                app:boxStrokeColor="@color/colorPrimary"
+                app:boxStrokeWidthFocused="2dp"
+                app:hintTextColor="#666666"
+                app:placeholderTextColor="#999999"
+                android:textColorHint="#999999"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+        <EditText
+            android:textColor="#000000"
+                    android:id="@+id/contactPhoneEditText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Contact Phone"
+                    android:inputType="phone" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Amenities Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Amenities &amp; Features"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorPrimary"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp" />
+
+            <CheckBox
+                android:id="@+id/furnishedCheckBox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Furnished"
+                android:layout_marginBottom="8dp"
+                android:textColor="@color/black" />
+
+            <CheckBox
+                android:id="@+id/privateBathroomCheckBox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Private Bathroom"
+                android:layout_marginBottom="8dp"
+                android:textColor="@color/black" />
+
+            <CheckBox
+                android:id="@+id/electricityIncludedCheckBox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Electricity Included"
+                android:layout_marginBottom="8dp"
+                android:textColor="@color/black" />
+
+            <CheckBox
+                android:id="@+id/waterIncludedCheckBox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Water Included"
+                android:layout_marginBottom="8dp"
+                android:textColor="@color/black" />
+
+            <CheckBox
+                android:id="@+id/internetIncludedCheckBox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Internet Included"
+                android:layout_marginBottom="12dp"
+                android:textColor="@color/black" />
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/amenitiesChipGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                app:chipSpacing="8dp" />
+
+            <!-- Images Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Property Images"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorPrimary"
+                android:layout_marginTop="12dp"
+                android:layout_marginBottom="12dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/imagesRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="150dp"
+                android:layout_marginBottom="12dp"
+                android:background="#F5F5F5" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/addImageButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="+ Add Images"
+                android:layout_marginBottom="24dp"
+                android:textColor="@color/system_blue"
+                app:icon="@android:drawable/ic_menu_camera"
+                app:iconGravity="start"
+                app:iconTint="@color/system_blue"
+                app:strokeColor="@color/system_blue"
+                app:strokeWidth="2dp"
+                app:cornerRadius="24dp"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+            <!-- Submit Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/submitButton"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:text="List Property"
+                android:textSize="16sp"
+                android:textColor="@color/white"
+                android:layout_marginBottom="24dp"
+                app:backgroundTint="@color/black"
+                app:cornerRadius="30dp" />
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

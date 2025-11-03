@@ -10,18 +10,22 @@
             android:title="Home" />
         
         <item
-            android:id="@+id/nav_favorites"
-            android:icon="@drawable/ic_heart"
-            android:title="Favorites" />
+            android:id="@+id/nav_listings"
+            android:icon="@drawable/ic_house_placeholder"
+            android:title="My Listings" />
+        
+        <item
+            android:id="@+id/nav_bookings"
+            android:icon="@drawable/ic_bookings"
+            android:title="Bookings" />
     </group>
-    
+
     <item android:title="View Mode">
         <menu>
             <item
-                android:id="@+id/nav_switch_to_owner"
-                android:icon="@drawable/ic_house_placeholder"
-                android:title="Switch to Owner View"
-                android:visible="false" />
+                android:id="@+id/nav_switch_to_tenant"
+                android:icon="@drawable/ic_search"
+                android:title="Switch to Tenant View" />
         </menu>
     </item>
 

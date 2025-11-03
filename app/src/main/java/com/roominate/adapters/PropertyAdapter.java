@@ -41,11 +41,14 @@ public class PropertyAdapter extends RecyclerView.Adapter<PropertyAdapter.ViewHo
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Property p = properties.get(position);
-        holder.title.setText(p.title);
-        holder.address.setText(p.address);
-        holder.price.setText(p.price);
-        if (p.thumbnailUrl != null && !p.thumbnailUrl.isEmpty()) {
-            Picasso.get().load(p.thumbnailUrl).fit().centerCrop().into(holder.thumbnail);
+        holder.title.setText(p.getName());
+        holder.address.setText(p.getAddress());
+    // monthly rate may be a floating-point value; use a float-friendly format
+    double rate = p.getMonthlyRate();
+    String formattedRate = String.format("%,.0f", rate); // no decimal places
+    holder.price.setText("₱" + formattedRate + "/mo");
+        if (p.getThumbnailUrl() != null && !p.getThumbnailUrl().isEmpty()) {
+            Picasso.get().load(p.getThumbnailUrl()).fit().centerCrop().into(holder.thumbnail);
         } else {
             holder.thumbnail.setImageResource(R.drawable.ic_house_placeholder);
         }

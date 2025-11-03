@@ -107,19 +107,113 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
     }
 
     private void loadBoardingHouseDetails() {
-        // TODO: Load boarding house details from Supabase
-        // BoardingHouseRepository.getById(boardingHouseId, new DataCallback() {
-        //     @Override
-        //     public void onSuccess(BoardingHouse bh) {
-        //         boardingHouse = bh;
-        //         displayBoardingHouseDetails();
-        //     }
-        //
-        //     @Override
-        //     public void onError(String error) {
-        //         Toast.makeText(BoardingHouseDetailsActivity.this, error, Toast.LENGTH_SHORT).show();
-        //     }
-        // });
+        if (boardingHouseId == null || boardingHouseId.isEmpty()) {
+            Toast.makeText(this, "Property ID not found", Toast.LENGTH_SHORT).show();
+            finish();
+            return;
+        }
+        
+        new Thread(() -> {
+            try {
+                String supabaseUrl = com.roominate.BuildConfig.SUPABASE_URL;
+                String supabaseKey = com.roominate.BuildConfig.SUPABASE_ANON_KEY;
+                
+                SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
+                String accessToken = prefs.getString("access_token", null);
+                
+                String url = supabaseUrl + "/rest/v1/boarding_houses?id=eq." + boardingHouseId + "&select=*";
+                Log.d(TAG, "Loading property details from: " + url);
+                
+                Request.Builder requestBuilder = new Request.Builder()
+                        .url(url)
+                        .get()
+                        .addHeader("apikey", supabaseKey);
+                
+                if (accessToken != null && !accessToken.isEmpty()) {
+                    requestBuilder.addHeader("Authorization", "Bearer " + accessToken);
+                } else {
+                    requestBuilder.addHeader("Authorization", "Bearer " + supabaseKey);
+                }
+                
+                Request request = requestBuilder.build();
+                Response response = httpClient.newCall(request).execute();
+                
+                if (response.isSuccessful() && response.body() != null) {
+                    String responseBody = response.body().string();
+                    Log.d(TAG, "Property response: " + responseBody);
+                    
+                    JSONArray jsonArray = new JSONArray(responseBody);
+                    
+                    if (jsonArray.length() > 0) {
+                        JSONObject jsonObject = jsonArray.getJSONObject(0);
+                        
+                        // Create BoardingHouse object from JSON
+                        boardingHouse = new BoardingHouse();
+                        boardingHouse.setId(jsonObject.optString("id"));
+                        boardingHouse.setOwnerId(jsonObject.optString("owner_id"));
+                        boardingHouse.setName(jsonObject.optString("name"));
+                        boardingHouse.setDescription(jsonObject.optString("description"));
+                        boardingHouse.setAddress(jsonObject.optString("address"));
+                        boardingHouse.setCity(jsonObject.optString("city"));
+                        boardingHouse.setProvince(jsonObject.optString("province"));
+                        boardingHouse.setPricePerMonth(jsonObject.optDouble("monthly_rate", 0.0));
+                        boardingHouse.setSecurityDeposit(jsonObject.optDouble("security_deposit", 0.0));
+                        boardingHouse.setAvailableRooms(jsonObject.optInt("available_rooms", 0));
+                        boardingHouse.setTotalRooms(jsonObject.optInt("total_rooms", 0));
+                        boardingHouse.setContactPerson(jsonObject.optString("contact_person"));
+                        boardingHouse.setContactPhone(jsonObject.optString("contact_phone"));
+                        
+                        // Parse images
+                        if (jsonObject.has("images") && !jsonObject.isNull("images")) {
+                            JSONArray imagesArray = jsonObject.optJSONArray("images");
+                            if (imagesArray != null) {
+                                java.util.List<String> imageUrls = new java.util.ArrayList<>();
+                                for (int i = 0; i < imagesArray.length(); i++) {
+                                    imageUrls.add(imagesArray.getString(i));
+                                }
+                                boardingHouse.setImageUrls(imageUrls);
+                            }
+                        }
+                        
+                        // Parse amenities
+                        if (jsonObject.has("amenities") && !jsonObject.isNull("amenities")) {
+                            JSONArray amenitiesArray = jsonObject.optJSONArray("amenities");
+                            if (amenitiesArray != null) {
+                                java.util.List<String> amenities = new java.util.ArrayList<>();
+                                for (int i = 0; i < amenitiesArray.length(); i++) {
+                                    amenities.add(amenitiesArray.getString(i));
+                                }
+                                boardingHouse.setAmenities(amenities);
+                            }
+                        }
+                        
+                        new Handler(Looper.getMainLooper()).post(this::displayBoardingHouseDetails);
+                    } else {
+                        new Handler(Looper.getMainLooper()).post(() -> {
+                            Toast.makeText(this, "Property not found", Toast.LENGTH_SHORT).show();
+                            finish();
+                        });
+                    }
+                } else {
+                    String errorBody = response.body() != null ? response.body().string() : "Unknown error";
+                    Log.e(TAG, "Failed to load property: " + response.code() + " - " + errorBody);
+                    
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        Toast.makeText(this, "Failed to load property details", Toast.LENGTH_SHORT).show();
+                        finish();
+                    });
+                }
+                
+                response.close();
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Error loading property details", e);
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    finish();
+                });
+            }
+        }).start();
     }
 
     private void displayBoardingHouseDetails() {

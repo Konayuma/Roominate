@@ -109,16 +109,9 @@ public class SignUpEmailActivity extends AppCompatActivity {
         progressBar.setVisibility(View.VISIBLE);
         continueButton.setEnabled(false);
 
-        // Use a dummy password for initial signup - will be updated after confirmation
-        String dummyPassword = "TempPass123!";
-
-        SupabaseClient.getInstance().signUp(
-            firstName != null ? firstName : "",
-            lastName != null ? lastName : "",
+        // Send OTP for email verification - user will be created later after password entry
+        SupabaseClient.getInstance().requestOtp(
             email,
-            phone != null ? phone : "",
-            dummyPassword,
-            userRole != null ? userRole : "tenant",
             new SupabaseClient.ApiCallback() {
                 @Override
                 public void onSuccess(JSONObject response) {
@@ -126,7 +119,7 @@ public class SignUpEmailActivity extends AppCompatActivity {
                         progressBar.setVisibility(View.GONE);
                         continueButton.setEnabled(true);
                         Toast.makeText(SignUpEmailActivity.this,
-                            "Confirmation code sent! Please check your email.", Toast.LENGTH_LONG).show();
+                            "Verification code sent! Please check your email.", Toast.LENGTH_LONG).show();
 
                         Intent intent = new Intent(SignUpEmailActivity.this, SignUpEmailVerificationActivity.class);
                         intent.putExtra("email", email);
@@ -134,7 +127,6 @@ public class SignUpEmailActivity extends AppCompatActivity {
                         intent.putExtra("firstName", firstName);
                         intent.putExtra("lastName", lastName);
                         intent.putExtra("phone", phone);
-                        intent.putExtra("dummyPassword", dummyPassword);
                         startActivity(intent);
                         finish();
                     });
@@ -145,7 +137,7 @@ public class SignUpEmailActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         progressBar.setVisibility(View.GONE);
                         continueButton.setEnabled(true);
-                        Toast.makeText(SignUpEmailActivity.this, "Sign up failed: " + error, Toast.LENGTH_LONG).show();
+                        Toast.makeText(SignUpEmailActivity.this, "Failed to send verification code: " + error, Toast.LENGTH_LONG).show();
                     });
                 }
             }

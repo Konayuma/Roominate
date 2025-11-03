@@ -174,42 +174,18 @@ public class SignUpEmailVerificationActivity extends AppCompatActivity {
                      code4.getText().toString() + 
                      code5.getText().toString() + 
                      code6.getText().toString();
-
-        Log.d("VerificationActivity", "=== VERIFY CODE CALLED ===");
-        Log.d("VerificationActivity", "Code length: " + code.length());
-        Log.d("VerificationActivity", "Code: " + code);
-        Log.d("VerificationActivity", "Email: " + email);
-
         if (code.length() != 6) {
             Toast.makeText(this, "Please enter the complete verification code", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Show progress
-        progressBar.setVisibility(View.VISIBLE);
-        // Disable inputs
-        resendText.setEnabled(false);
+        // We no longer verify the OTP from this screen. The password screen will call
+        // the combined flow which verifies the OTP server-side and creates the account.
+        // This avoids duplicate verification requests and keeps the password creation
+        // atomic during signup.
 
-        SupabaseClient.getInstance().verifyOtp(email, code, new SupabaseClient.ApiCallback() {
-            @Override
-            public void onSuccess(JSONObject response) {
-                runOnUiThread(() -> {
-                    progressBar.setVisibility(View.GONE);
-                    // OTP verified, proceed to password/setup flow
-                    Toast.makeText(SignUpEmailVerificationActivity.this, "Verification successful", Toast.LENGTH_SHORT).show();
-                    proceedToPassword(code);
-                });
-            }
-
-            @Override
-            public void onError(String error) {
-                runOnUiThread(() -> {
-                    progressBar.setVisibility(View.GONE);
-                    resendText.setEnabled(true);
-                    Toast.makeText(SignUpEmailVerificationActivity.this, "Verification failed: " + error, Toast.LENGTH_LONG).show();
-                });
-            }
-        });
+        // Navigate to password entry screen with the OTP
+        proceedToPassword(code);
     }
 
     private void sendOtp() {
@@ -251,7 +227,6 @@ public class SignUpEmailVerificationActivity extends AppCompatActivity {
 
     private void resendCode() {
         // This method is kept for backward compatibility but we'll call sendOtp now
-        sendOtp();
     }
 
     private void proceedToPassword(String otp) {
@@ -265,7 +240,6 @@ public class SignUpEmailVerificationActivity extends AppCompatActivity {
         intent.putExtra("otp", otp);
         startActivity(intent);
         overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left);
-        finish();
     }
 
     @Override

@@ -87,7 +87,7 @@ public class FavoritesFragment extends Fragment {
         recyclerView.setLayoutManager(new GridLayoutManager(getContext(), 2));
         adapter = new PropertyAdapter(getContext(), favoriteProperties, property -> {
             Intent intent = new Intent(getActivity(), BoardingHouseDetailsActivity.class);
-            intent.putExtra("boarding_house_id", property.id);
+            intent.putExtra("boarding_house_id", property.getId());
             startActivity(intent);
         });
         recyclerView.setAdapter(adapter);
@@ -147,13 +147,12 @@ public class FavoritesFragment extends Fragment {
                             double price = bhObj.optDouble("price_per_month", 0);
                             String thumbnailUrl = ""; // TODO: Get from properties_media
                             
-                            Property property = new Property(
-                                id,
-                                title,
-                                address,
-                                String.format("₱%.2f / month", price),
-                                thumbnailUrl
-                            );
+                            Property property = new Property();
+                            property.setId(id);
+                            property.setName(title);
+                            property.setAddress(address);
+                            property.setMonthlyRate((int) price);
+                            property.setThumbnailUrl(thumbnailUrl);
                             properties.add(property);
                         }
                     }

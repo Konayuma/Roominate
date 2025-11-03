@@ -1,54 +1,30 @@
 package com.roominate.activities.tenant;
 
 import android.os.Bundle;
+import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
-import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.MapView;
-import com.google.android.gms.maps.OnMapReadyCallback;
 import com.roominate.R;
 
-public class MapActivity extends AppCompatActivity implements OnMapReadyCallback {
-
-    private MapView mapView;
-    private GoogleMap googleMap;
+/**
+ * MapActivity - Placeholder for map functionality
+ * TODO: Add Google Maps dependency and implement map features
+ * 
+ * To enable Google Maps:
+ * 1. Add to app/build.gradle: implementation 'com.google.android.gms:play-services-maps:18.2.0'
+ * 2. Add API key to AndroidManifest.xml
+ * 3. Implement OnMapReadyCallback
+ */
+public class MapActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_map);
-
-        mapView = findViewById(R.id.mapView);
-        mapView.onCreate(savedInstanceState);
-        mapView.getMapAsync(this);
-    }
-
-    @Override
-    public void onMapReady(GoogleMap map) {
-        googleMap = map;
-        // TODO: Add markers to the map
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        mapView.onResume();
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        mapView.onPause();
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        mapView.onDestroy();
-    }
-
-    @Override
-    public void onLowMemory() {
-        super.onLowMemory();
-        mapView.onLowMemory();
+        
+        // TODO: Replace with actual map implementation when Google Maps is set up
+        TextView placeholderText = findViewById(R.id.mapPlaceholder);
+        if (placeholderText != null) {
+            placeholderText.setText("Map feature coming soon!\n\nTo enable:\n• Add Google Maps dependency\n• Configure API key\n• Implement map markers");
+        }
     }
 }

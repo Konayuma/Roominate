@@ -59,12 +59,29 @@ serve(async (req) => {
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString()
 
-    // Hash OTP before storing (using SHA-256)
+    // Ensure OTP_SALT is configured and normalize inputs before hashing
+    const otpSalt = Deno.env.get('OTP_SALT')
+    if (!otpSalt) {
+      console.error('Missing OTP_SALT environment variable')
+      return new Response(
+        JSON.stringify({ error: 'Server OTP configuration missing' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Hash OTP before storing (using SHA-256). Normalize strings to avoid accidental mismatch
     const encoder = new TextEncoder()
-    const data = encoder.encode(otp + Deno.env.get('OTP_SALT'))
+    const otpStr = String(otp).trim()
+    const saltStr = String(otpSalt).trim()
+    const data = encoder.encode(otpStr + saltStr)
     const hashBuffer = await crypto.subtle.digest('SHA-256', data)
     const hashArray = Array.from(new Uint8Array(hashBuffer))
     const otpHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+
+    console.log('Generated OTP:', otp, '(length:', otpStr.length, ')')
+    console.log('OTP salt length:', saltStr.length)
+    console.log('OTP + Salt to hash:', `"${otpStr}${saltStr}"`)
+    console.log('Generated hash:', otpHash)
 
     // Store hashed OTP with 5 minute expiry
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString()
@@ -94,7 +111,7 @@ serve(async (req) => {
 
     console.log('Inserted OTP row id=', insertedRow.id)
 
-    // Send email using SMTP (configure your SMTP service)
+  // Send email using SMTP (configure your SMTP service)
     // For production, use SendGrid, Mailgun, or AWS SES
     const emailSent = await sendEmail(email, otp)
 
@@ -129,8 +146,11 @@ async function sendEmail(email: string, otp: string): Promise<boolean> {
     // Requires RESEND_API_KEY environment variable set in Supabase Edge Function secrets
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
     
-    // If RESEND_API_KEY is configured, prefer Resend (fast, reliable)
-    if (resendApiKey) {
+  // Prefer using a configurable sender address (SENDER_EMAIL) so we can send from a verified domain.
+  const sender = Deno.env.get('SENDER_EMAIL') ?? 'Roominate <onboarding@resend.dev>'
+
+  // If RESEND_API_KEY is configured, prefer Resend (fast, reliable)
+  if (resendApiKey) {
       // Send via Resend API
       const emailHtml = `
       <!DOCTYPE html>
@@ -190,7 +210,7 @@ The Roominate Team
           'Authorization': `Bearer ${resendApiKey}`
         },
         body: JSON.stringify({
-          from: 'Roominate <onboarding@resend.dev>', // Change to your verified domain
+          from: sender, // Use configured from address (must be verified in Resend for production)
           to: email,
           subject: 'Your Roominate Verification Code',
           html: emailHtml,
@@ -202,7 +222,7 @@ The Roominate Team
         const errorText = await response.text()
         console.error('Resend API error:', response.status, errorText)
         console.log(`⚠️ OTP for ${email}: ${otp} (Email delivery failed)`)
-        return true // Return true to not block development
+        return false
       }
 
       const result = await response.json()
@@ -221,7 +241,7 @@ The Roominate Team
     if (!gmailClientId || !gmailClientSecret || !gmailRefreshToken || !senderEmail) {
       console.error('No email provider configured (RESEND_API_KEY or GMAIL_* env vars)')
       console.log(`⚠️ OTP for ${email}: ${otp} (Email provider not configured)`)
-      return true // do not block development; OTP recorded in DB
+      return false // indicate delivery not attempted/failed
     }
 
     // Exchange refresh token for access token
@@ -239,14 +259,14 @@ The Roominate Team
     if (!tokenResp.ok) {
       const err = await tokenResp.text()
       console.error('Failed to exchange refresh token:', tokenResp.status, err)
-      return true
+      return false
     }
 
     const tokenJson = await tokenResp.json()
     const accessToken = tokenJson.access_token
     if (!accessToken) {
       console.error('No access_token returned from Google token endpoint', tokenJson)
-      return true
+      return false
     }
 
     // Build raw RFC 2822 MIME message
@@ -287,7 +307,7 @@ The Roominate Team
       const err = await sendResp.text()
       console.error('Gmail API send error:', sendResp.status, err)
       console.log(`⚠️ OTP for ${email}: ${otp} (Gmail delivery failed)`)
-      return true
+      return false
     }
 
     const sent = await sendResp.json()

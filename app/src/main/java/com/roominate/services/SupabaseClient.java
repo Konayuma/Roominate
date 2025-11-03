@@ -1,7 +1,9 @@
 package com.roominate.services;
 
 import android.util.Log;
+import android.content.Context;
 import com.roominate.BuildConfig;
+import com.roominate.models.Property;
 import okhttp3.*;
 import okhttp3.logging.HttpLoggingInterceptor;
 import org.json.JSONObject;
@@ -15,6 +17,8 @@ import java.util.concurrent.TimeUnit;
 public class SupabaseClient {
     private static final String TAG = "SupabaseClient";
     private static SupabaseClient instance;
+    // Application context set during app startup. Must be initialized via SupabaseClient.init(context)
+    private static Context appContext;
     private final OkHttpClient client;
     private final String supabaseUrl;
     private final String supabaseKey;
@@ -41,6 +45,38 @@ public class SupabaseClient {
             instance = new SupabaseClient();
         }
         return instance;
+    }
+
+    /**
+     * Initialize SupabaseClient with an application context. This must be called once
+     * from Application.onCreate() or an Activity before methods that rely on SharedPreferences
+     * (for example getUserProfile) are used.
+     */
+    public static void init(Context context) {
+        if (context != null) {
+            appContext = context.getApplicationContext();
+            Log.d(TAG, "SupabaseClient initialized with application context");
+        }
+    }
+
+    /**
+     * Get the current user's ID from SharedPreferences (stored during login)
+     */
+    private String getCurrentUserId() {
+        try {
+            if (appContext == null) {
+                Log.e(TAG, "App context not initialized. Call SupabaseClient.init(context) from Application or Activity.");
+                return null;
+            }
+
+            android.content.SharedPreferences prefs = appContext.getSharedPreferences("roominate_prefs", android.content.Context.MODE_PRIVATE);
+            String userId = prefs.getString("user_id", null);
+            Log.d(TAG, "Retrieved user ID from SharedPreferences: " + userId);
+            return userId;
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting current user ID", e);
+            return null;
+        }
     }
 
     public void signUpUser(String email, String password, String role, String firstName, String lastName, ApiCallback callback) {
@@ -92,52 +128,77 @@ public class SupabaseClient {
     }
 
     public void getPropertiesByOwner(ApiCallback callback) {
-        // This needs the owner's user ID. For now, we can't get it reliably without auth state.
-        // This should be updated once auth state management is in place.
-        // For now, let's fetch all properties as a placeholder.
+        // Get current user ID from SharedPreferences
+        String ownerId = getCurrentUserId();
+        
+        if (ownerId == null || ownerId.isEmpty()) {
+            Log.e(TAG, "Cannot fetch properties: user ID not available");
+            callback.onError("User not authenticated");
+            return;
+        }
+        
+        Log.d(TAG, "Fetching properties for owner: " + ownerId);
+        
+        // Query boarding_houses table filtering by owner_id
+        String url = supabaseUrl + "/rest/v1/boarding_houses?owner_id=eq." + ownerId + "&select=*&order=created_at.desc";
+        
         Request request = new Request.Builder()
-                .url(supabaseUrl + "/rest/v1/properties?select=*")
+                .url(url)
                 .get()
                 .addHeader("apikey", supabaseKey)
                 .addHeader("Authorization", "Bearer " + supabaseKey)
+                .addHeader("Content-Type", "application/json")
                 .build();
 
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "getPropertiesByOwner request failed", e);
                 callback.onError("Network error: " + e.getMessage());
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                try (ResponseBody responseBody = response.body()) {
-                    String bodyString = responseBody.string();
+                try {
+                    String bodyString = response.body().string();
+                    Log.d(TAG, "getPropertiesByOwner response (" + response.code() + "): " + bodyString);
+                    
                     if (response.isSuccessful()) {
-                        // The result is a JSON array, so we wrap it in an object
+                        // The result is a JSON array of boarding_houses
+                        JSONArray propertiesArray = new JSONArray(bodyString);
                         JSONObject result = new JSONObject();
-                        result.put("data", new JSONArray(bodyString));
+                        result.put("data", propertiesArray);
+                        result.put("count", propertiesArray.length());
                         callback.onSuccess(result);
                     } else {
-                        callback.onError("Failed to fetch properties: " + bodyString);
+                        callback.onError("Failed to fetch properties: HTTP " + response.code() + " - " + bodyString);
                     }
                 } catch (Exception e) {
-                    callback.onError("Failed to parse properties response.");
+                    Log.e(TAG, "Error parsing getPropertiesByOwner response", e);
+                    callback.onError("Failed to parse properties response: " + e.getMessage());
                 }
             }
         });
     }
 
     public void getPropertyById(String propertyId, ApiCallback callback) {
+        Log.d(TAG, "Fetching property by ID: " + propertyId);
+        
+        // Query boarding_houses table by id
+        String url = supabaseUrl + "/rest/v1/boarding_houses?id=eq." + propertyId + "&select=*";
+        
         Request request = new Request.Builder()
-                .url(supabaseUrl + "/rest/v1/properties?id=eq." + propertyId + "&select=*")
+                .url(url)
                 .get()
                 .addHeader("apikey", supabaseKey)
                 .addHeader("Authorization", "Bearer " + supabaseKey)
+                .addHeader("Content-Type", "application/json")
                 .build();
 
         client.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "getPropertyById request failed", e);
                 callback.onError("Network error: " + e.getMessage());
             }
 
@@ -161,40 +222,51 @@ public class SupabaseClient {
 
     public void insertProperty(Property property, ApiCallback callback) {
         try {
-            // We need the owner ID. This should be retrieved from auth state.
-            // For now, this will fail if owner_id is a required foreign key.
-            // You'll need to pass the logged-in user's ID to this method.
-            // property.setOwnerId( "USER_ID_FROM_AUTH" ); 
+            // Get the current user ID and set it as owner_id
+            String ownerId = getCurrentUserId();
+            if (ownerId == null || ownerId.isEmpty()) {
+                callback.onError("User not authenticated");
+                return;
+            }
+            
+            property.setOwnerId(ownerId);
+            Log.d(TAG, "Inserting property for owner: " + ownerId);
 
             RequestBody body = RequestBody.create(property.toJson().toString(), MediaType.parse("application/json"));
             Request request = new Request.Builder()
-                    .url(supabaseUrl + "/rest/v1/properties")
+                    .url(supabaseUrl + "/rest/v1/boarding_houses")
                     .post(body)
                     .addHeader("apikey", supabaseKey)
-                    .addHeader("Authorization", "Bearer " + supabaseKey) // Use user's token
+                    .addHeader("Authorization", "Bearer " + supabaseKey)
+                    .addHeader("Content-Type", "application/json")
                     .addHeader("Prefer", "return=representation")
                     .build();
 
             client.newCall(request).enqueue(createGenericCallback(callback));
         } catch (Exception e) {
-            callback.onError("Failed to create insert request.");
+            Log.e(TAG, "Failed to create insert request", e);
+            callback.onError("Failed to create insert request: " + e.getMessage());
         }
     }
 
     public void updateProperty(Property property, ApiCallback callback) {
         try {
+            Log.d(TAG, "Updating property: " + property.getId());
+            
             RequestBody body = RequestBody.create(property.toJson().toString(), MediaType.parse("application/json"));
             Request request = new Request.Builder()
-                    .url(supabaseUrl + "/rest/v1/properties?id=eq." + property.getId())
+                    .url(supabaseUrl + "/rest/v1/boarding_houses?id=eq." + property.getId())
                     .patch(body)
                     .addHeader("apikey", supabaseKey)
-                    .addHeader("Authorization", "Bearer " + supabaseKey) // Use user's token
+                    .addHeader("Authorization", "Bearer " + supabaseKey)
+                    .addHeader("Content-Type", "application/json")
                     .addHeader("Prefer", "return=representation")
                     .build();
 
             client.newCall(request).enqueue(createGenericCallback(callback));
         } catch (Exception e) {
-            callback.onError("Failed to create update request.");
+            Log.e(TAG, "Failed to create update request", e);
+            callback.onError("Failed to create update request: " + e.getMessage());
         }
     }
 
@@ -393,15 +465,65 @@ public class SupabaseClient {
      * Get user profile
      */
     public void getUserProfile(ApiCallback callback) {
-        // This would require a valid access token from a previous login
-        // For now, return a mock response
-        try {
-            JSONObject mockProfile = new JSONObject();
-            mockProfile.put("role", "tenant"); // Default role
-            callback.onSuccess(mockProfile);
-        } catch (Exception e) {
-            callback.onError("Failed to get user profile");
+        // Get the current user's ID from auth session
+        String currentUserId = getCurrentUserId();
+        
+        if (currentUserId == null || currentUserId.isEmpty()) {
+            Log.e(TAG, "No current user ID available");
+            callback.onError("User not authenticated");
+            return;
         }
+        
+        Log.d(TAG, "Fetching profile for user ID: " + currentUserId);
+        
+        // Query the public.users table for the current user's profile
+        String url = supabaseUrl + "/rest/v1/users?id=eq." + currentUserId + "&select=*";
+        
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", supabaseKey)
+                .addHeader("Authorization", "Bearer " + supabaseKey)
+                .addHeader("Content-Type", "application/json")
+                .build();
+        
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "getUserProfile request failed", e);
+                callback.onError("Network error: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String responseBody = response.body().string();
+                    Log.d(TAG, "getUserProfile response: " + responseBody);
+                    
+                    if (response.isSuccessful()) {
+                        JSONArray responseArray = new JSONArray(responseBody);
+                        if (responseArray.length() > 0) {
+                            JSONObject userProfile = responseArray.getJSONObject(0);
+                            Log.d(TAG, "User profile found: " + userProfile.toString());
+                            callback.onSuccess(userProfile);
+                        } else {
+                            Log.w(TAG, "No profile found for user ID: " + currentUserId);
+                            // Return a default response with tenant role
+                            JSONObject defaultProfile = new JSONObject();
+                            defaultProfile.put("id", currentUserId);
+                            defaultProfile.put("role", "tenant");
+                            callback.onSuccess(defaultProfile);
+                        }
+                    } else {
+                        Log.e(TAG, "getUserProfile HTTP error: " + response.code());
+                        callback.onError("HTTP " + response.code() + ": " + responseBody);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing getUserProfile response", e);
+                    callback.onError("Failed to parse response: " + e.getMessage());
+                }
+            }
+        });
     }
 
     /**
@@ -561,234 +683,621 @@ public class SupabaseClient {
      */
     public void completeSignup(String email, String password, String otp, String firstName, String lastName, String phone, String role, String dob, ApiCallback callback) {
         try {
-            // Recommended flow: perform client-side signup with anon key, then
-            // insert a profile row into the `profiles` table. This avoids using
-            // the service role on the client and keeps signup atomic from the
-            // app's perspective.
-
-            // Call the existing signUp method which performs /auth/v1/signup
-            SupabaseClient.this.signUp(firstName, lastName, email, phone, password, role, new ApiCallback() {
+            // New recommended flow: verify OTP first (server-side via Edge function), then create the auth user.
+            // This ensures the password the user enters becomes the account password during creation.
+            SupabaseClient.this.verifyOtp(email, otp, new ApiCallback() {
                 @Override
-                public void onSuccess(JSONObject signupResp) {
+                public void onSuccess(JSONObject verifyResp) {
                     try {
-                        // Attempt to extract user id from signup response
-                        String userId = null;
-                        if (signupResp.has("user")) {
-                            JSONObject userObj = signupResp.optJSONObject("user");
-                            if (userObj != null) userId = userObj.optString("id", null);
-                        }
-                        // Some responses return user at top-level
-                        if (userId == null && signupResp.has("id")) {
-                            userId = signupResp.optString("id", null);
-                        }
-
-                        // If we couldn't find user id, still return signupResp
-                        if (userId == null || userId.isEmpty()) {
-                            callback.onSuccess(signupResp);
+                        // Check if OTP verification succeeded
+                        // The verify-otp function returns "success": true when OTP is valid
+                        // It may also return "confirmed": true if the user was found and updated in auth
+                        boolean otpVerified = verifyResp.optBoolean("success", false);
+                        
+                        if (!otpVerified) {
+                            callback.onError("Invalid or expired verification code. Please try again.");
                             return;
                         }
+                        
+                        // OTP is valid, proceed with signup
+                        // Note: The user will be created in the next step with email already verified
 
-                        // Build profile object to insert
-                        JSONObject profile = new JSONObject();
-                        profile.put("id", userId);
-                        profile.put("email", email);
-                        profile.put("first_name", firstName != null ? firstName : JSONObject.NULL);
-                        profile.put("last_name", lastName != null ? lastName : JSONObject.NULL);
-                        profile.put("role", role != null ? role : JSONObject.NULL);
-                        profile.put("dob", (dob != null && !dob.isEmpty()) ? dob : JSONObject.NULL);
-                        profile.put("phone", phone != null ? phone : JSONObject.NULL);
+                        // OTP confirmed server-side — proceed to create the auth user
+                        SupabaseClient.this.signUp(firstName, lastName, email, phone, password, role, new ApiCallback() {
+                            @Override
+                            public void onSuccess(JSONObject signupResp) {
+                                try {
+                                    // Extract user id if present
+                                    String userId = null;
+                                    if (signupResp.has("user")) {
+                                        JSONObject userObj = signupResp.optJSONObject("user");
+                                        if (userObj != null) userId = userObj.optString("id", null);
+                                    }
+                                    if (userId == null && signupResp.has("id")) {
+                                        userId = signupResp.optString("id", null);
+                                    }
 
-                        // Capture userId into a final variable so inner classes can reference it
-                        final String capturedUserId = userId;
+                                    // Build profile object
+                                    JSONObject profile = new JSONObject();
+                                    if (userId != null) profile.put("id", userId);
+                                    profile.put("email", email);
+                                    profile.put("first_name", firstName != null ? firstName : JSONObject.NULL);
+                                    profile.put("last_name", lastName != null ? lastName : JSONObject.NULL);
+                                    profile.put("role", role != null ? role : JSONObject.NULL);
+                                    profile.put("dob", (dob != null && !dob.isEmpty()) ? dob : JSONObject.NULL);
+                                    profile.put("phone", phone != null ? phone : JSONObject.NULL);
 
-                        // Helper to perform profile POST using provided token (async)
-                        java.util.function.Consumer<String> doProfileInsert = (token) -> {
-                            RequestBody body = RequestBody.create(profile.toString(), MediaType.parse("application/json"));
-                            Request req = new Request.Builder()
-                                    .url(supabaseUrl + "/rest/v1/profiles")
-                                    .post(body)
-                                    .addHeader("apikey", supabaseKey)
-                                    .addHeader("Authorization", "Bearer " + (token != null ? token : supabaseKey))
-                                    .addHeader("Content-Type", "application/json")
-                                    .addHeader("Prefer", "return=representation")
-                                    .build();
+                                    // Capture userId for use inside inner classes (must be final/effectively final)
+                                    final String capturedUserId = userId;
 
-                            client.newCall(req).enqueue(new Callback() {
-                                @Override
-                                public void onFailure(Call call, IOException e) {
-                                    Log.w(TAG, "Profile insert failed", e);
-                                    // Signup succeeded but profile insert failed; surface signup result
-                                    callback.onSuccess(signupResp);
-                                }
+                                    // Helper to insert profile using a token (if available)
+                                    java.util.function.Consumer<String> doProfileInsert = (token) -> {
+                                        RequestBody body = RequestBody.create(profile.toString(), MediaType.parse("application/json"));
+                                        Request req = new Request.Builder()
+                                                .url(supabaseUrl + "/rest/v1/users")
+                                                .post(body)
+                                                .addHeader("apikey", supabaseKey)
+                                                .addHeader("Authorization", "Bearer " + (token != null ? token : supabaseKey))
+                                                .addHeader("Content-Type", "application/json")
+                                                .addHeader("Prefer", "return=representation")
+                                                .build();
 
-                                @Override
-                                public void onResponse(Call call, Response response) throws IOException {
-                                    try {
-                                        String respBody = response.body().string();
-                                        Log.d(TAG, "Profile insert response: " + respBody);
-                                        if (response.isSuccessful()) {
-                                            JSONObject insertJson = null;
-                                            try {
-                                                String trimmed = respBody != null ? respBody.trim() : "";
-                                                if (trimmed.startsWith("[")) {
-                                                    JSONArray arr = new JSONArray(trimmed);
-                                                    if (arr.length() > 0) insertJson = arr.getJSONObject(0);
-                                                    else insertJson = new JSONObject();
-                                                } else if (trimmed.startsWith("{")) {
-                                                    insertJson = new JSONObject(trimmed);
-                                                } else {
-                                                    insertJson = new JSONObject();
-                                                }
-                                            } catch (Exception e) {
-                                                Log.w(TAG, "Failed to parse profile insert response, returning empty profile object", e);
-                                                insertJson = new JSONObject();
+                                        client.newCall(req).enqueue(new Callback() {
+                                            @Override
+                                            public void onFailure(Call call, IOException e) {
+                                                Log.w(TAG, "Profile insert failed", e);
+                                                callback.onSuccess(signupResp);
                                             }
 
-                                            JSONObject merged = new JSONObject();
-                                            merged.put("signup", signupResp);
-                                            merged.put("profile", insertJson);
-                                            callback.onSuccess(merged);
-                                        } else {
-                                            // If conflict (profile exists) try PATCH (upsert)
-                                            if (response.code() == 409) {
+                                            @Override
+                                            public void onResponse(Call call, Response response) throws IOException {
                                                 try {
-                                                    RequestBody patchBody = RequestBody.create(profile.toString(), MediaType.parse("application/json"));
-                                                    String patchUrl = supabaseUrl + "/rest/v1/profiles?id=eq." + capturedUserId;
-                                                    Request patchReq = new Request.Builder()
-                                                            .url(patchUrl)
-                                                            .patch(patchBody)
-                                                            .addHeader("apikey", supabaseKey)
-                                                            .addHeader("Authorization", "Bearer " + (token != null ? token : supabaseKey))
-                                                            .addHeader("Content-Type", "application/json")
-                                                            .addHeader("Prefer", "return=representation")
-                                                            .build();
-
-                                                    client.newCall(patchReq).enqueue(new Callback() {
-                                                        @Override
-                                                        public void onFailure(Call call, IOException e) {
-                                                            Log.w(TAG, "Profile patch failed", e);
-                                                            callback.onSuccess(signupResp);
+                                                    String respBody = response.body().string();
+                                                    if (response.isSuccessful()) {
+                                                        JSONObject insertJson = null;
+                                                        String trimmed = respBody != null ? respBody.trim() : "";
+                                                        if (trimmed.startsWith("[")) {
+                                                            JSONArray arr = new JSONArray(trimmed);
+                                                            if (arr.length() > 0) insertJson = arr.getJSONObject(0);
+                                                            else insertJson = new JSONObject();
+                                                        } else if (trimmed.startsWith("{")) {
+                                                            insertJson = new JSONObject(trimmed);
+                                                        } else {
+                                                            insertJson = new JSONObject();
                                                         }
-
-                                                        @Override
-                                                        public void onResponse(Call call, Response patchResp) throws IOException {
+                                                        JSONObject merged = new JSONObject();
+                                                        merged.put("signup", signupResp);
+                                                        merged.put("profile", insertJson);
+                                                        callback.onSuccess(merged);
+                                                    } else {
+                                                        // If conflict (profile exists) try PATCH (upsert)
+                                                        if (response.code() == 409) {
                                                             try {
-                                                                String patchBodyStr = patchResp.body().string();
-                                                                if (patchResp.isSuccessful()) {
-                                                                    JSONObject insertJson = null;
-                                                                    String trimmed = patchBodyStr != null ? patchBodyStr.trim() : "";
-                                                                    if (trimmed.startsWith("[")) {
-                                                                        JSONArray arr = new JSONArray(trimmed);
-                                                                        if (arr.length() > 0) insertJson = arr.getJSONObject(0);
-                                                                        else insertJson = new JSONObject();
-                                                                    } else if (trimmed.startsWith("{")) {
-                                                                        insertJson = new JSONObject(trimmed);
-                                                                    } else {
-                                                                        insertJson = new JSONObject();
+                                                                RequestBody patchBody = RequestBody.create(profile.toString(), MediaType.parse("application/json"));
+                                                                String patchUrl = supabaseUrl + "/rest/v1/profiles" + (capturedUserId != null ? "?id=eq." + capturedUserId : "");
+                                                                Request patchReq = new Request.Builder()
+                                                                        .url(patchUrl)
+                                                                        .patch(patchBody)
+                                                                        .addHeader("apikey", supabaseKey)
+                                                                        .addHeader("Authorization", "Bearer " + (token != null ? token : supabaseKey))
+                                                                        .addHeader("Content-Type", "application/json")
+                                                                        .addHeader("Prefer", "return=representation")
+                                                                        .build();
+
+                                                                client.newCall(patchReq).enqueue(new Callback() {
+                                                                    @Override
+                                                                    public void onFailure(Call call, IOException e) {
+                                                                        Log.w(TAG, "Profile patch failed", e);
+                                                                        callback.onSuccess(signupResp);
                                                                     }
-                                                                    JSONObject merged = new JSONObject();
-                                                                    merged.put("signup", signupResp);
-                                                                    merged.put("profile", insertJson);
-                                                                    callback.onSuccess(merged);
-                                                                } else {
-                                                                    callback.onSuccess(signupResp);
-                                                                }
+
+                                                                    @Override
+                                                                    public void onResponse(Call call, Response patchResp) throws IOException {
+                                                                        try {
+                                                                            String patchBodyStr = patchResp.body().string();
+                                                                            if (patchResp.isSuccessful()) {
+                                                                                JSONObject insertJson = null;
+                                                                                String trimmed = patchBodyStr != null ? patchBodyStr.trim() : "";
+                                                                                if (trimmed.startsWith("[")) {
+                                                                                    JSONArray arr = new JSONArray(trimmed);
+                                                                                    if (arr.length() > 0) insertJson = arr.getJSONObject(0);
+                                                                                    else insertJson = new JSONObject();
+                                                                                } else if (trimmed.startsWith("{")) {
+                                                                                    insertJson = new JSONObject(trimmed);
+                                                                                } else {
+                                                                                    insertJson = new JSONObject();
+                                                                                }
+                                                                                JSONObject merged = new JSONObject();
+                                                                                merged.put("signup", signupResp);
+                                                                                merged.put("profile", insertJson);
+                                                                                callback.onSuccess(merged);
+                                                                            } else {
+                                                                                callback.onSuccess(signupResp);
+                                                                            }
+                                                                        } catch (Exception e) {
+                                                                            Log.e(TAG, "Error parsing profile patch response", e);
+                                                                            callback.onSuccess(signupResp);
+                                                                        }
+                                                                    }
+                                                                });
+                                                                return; // patch will call callback
                                                             } catch (Exception e) {
-                                                                Log.e(TAG, "Error parsing profile patch response", e);
+                                                                Log.e(TAG, "Error attempting profile patch", e);
                                                                 callback.onSuccess(signupResp);
+                                                                return;
                                                             }
                                                         }
-                                                    });
-                                                    return; // patch will call callback
+
+                                                        callback.onSuccess(signupResp);
+                                                    }
                                                 } catch (Exception e) {
-                                                    Log.e(TAG, "Error attempting profile patch", e);
+                                                    Log.e(TAG, "Error parsing profile insert response", e);
                                                     callback.onSuccess(signupResp);
-                                                    return;
+                                                }
+                                            }
+                                        });
+                                    };
+
+                                    // Try to prefer the access token returned by signup for the profile insert.
+                                    String accessToken = null;
+                                    try {
+                                        if (signupResp.has("access_token")) {
+                                            accessToken = signupResp.optString("access_token", null);
+                                        } else if (signupResp.has("session")) {
+                                            JSONObject session = signupResp.optJSONObject("session");
+                                            if (session != null) accessToken = session.optString("access_token", null);
+                                        } else if (signupResp.has("data")) {
+                                            JSONObject data = signupResp.optJSONObject("data");
+                                            if (data != null) accessToken = data.optString("access_token", null);
+                                        }
+                                    } catch (Exception e) {
+                                        Log.w(TAG, "Unable to extract access token from signup response", e);
+                                    }
+
+                                    if (accessToken != null && !accessToken.isEmpty()) {
+                                        doProfileInsert.accept(accessToken);
+                                    } else {
+                                        // No token returned: attempt sign-in to obtain token
+                                        SupabaseClient.this.signIn(email, password, new ApiCallback() {
+                                            @Override
+                                            public void onSuccess(JSONObject signinResp) {
+                                                try {
+                                                    String signinToken = null;
+                                                    if (signinResp.has("access_token")) {
+                                                        signinToken = signinResp.optString("access_token", null);
+                                                    } else if (signinResp.has("session")) {
+                                                        JSONObject session = signinResp.optJSONObject("session");
+                                                        if (session != null) signinToken = session.optString("access_token", null);
+                                                    } else if (signinResp.has("data")) {
+                                                        JSONObject data = signinResp.optJSONObject("data");
+                                                        if (data != null) signinToken = data.optString("access_token", null);
+                                                    }
+
+                                                    if (signinToken != null && !signinToken.isEmpty()) {
+                                                        doProfileInsert.accept(signinToken);
+                                                    } else {
+                                                        callback.onSuccess(signupResp);
+                                                    }
+                                                } catch (Exception e) {
+                                                    Log.e(TAG, "Error extracting token from signin response", e);
+                                                    callback.onSuccess(signupResp);
                                                 }
                                             }
 
-                                            Log.w(TAG, "Profile insert non-OK: " + response.code());
-                                            // Return signup result even if profile insert failed
-                                            callback.onSuccess(signupResp);
-                                        }
-                                    } catch (Exception e) {
-                                        Log.e(TAG, "Error parsing profile insert response", e);
-                                        callback.onSuccess(signupResp);
+                                            @Override
+                                            public void onError(String error) {
+                                                Log.w(TAG, "Sign-in after signup failed: " + error);
+                                                callback.onError(error);
+                                            }
+                                        });
                                     }
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Error finishing signup/profile insert", e);
+                                    callback.onError("Signup succeeded but post-processing failed");
                                 }
-                            });
-                        };
-
-                        // Try to prefer the access token returned by signup for the profile insert.
-                        String accessToken = null;
-                        try {
-                            if (signupResp.has("access_token")) {
-                                accessToken = signupResp.optString("access_token", null);
-                            } else if (signupResp.has("session")) {
-                                JSONObject session = signupResp.optJSONObject("session");
-                                if (session != null) accessToken = session.optString("access_token", null);
-                            } else if (signupResp.has("data")) {
-                                JSONObject data = signupResp.optJSONObject("data");
-                                if (data != null) accessToken = data.optString("access_token", null);
                             }
-                        } catch (Exception e) {
-                            Log.w(TAG, "Unable to extract access token from signup response", e);
-                        }
 
-                        if (accessToken != null && !accessToken.isEmpty()) {
-                            doProfileInsert.accept(accessToken);
-                        } else {
-                            // No token returned from signup; attempt to sign in (password grant) to obtain token
-                            SupabaseClient.this.signIn(email, password, new ApiCallback() {
-                                @Override
-                                public void onSuccess(JSONObject signinResp) {
-                                    try {
-                                        String signinToken = null;
-                                        if (signinResp.has("access_token")) {
-                                            signinToken = signinResp.optString("access_token", null);
-                                        } else if (signinResp.has("session")) {
-                                            JSONObject session = signinResp.optJSONObject("session");
-                                            if (session != null) signinToken = session.optString("access_token", null);
-                                        } else if (signinResp.has("data")) {
-                                            JSONObject data = signinResp.optJSONObject("data");
-                                            if (data != null) signinToken = data.optString("access_token", null);
-                                        }
+                            @Override
+                            public void onError(String error) {
+                                // If the signup failed because the user already exists, attempt to sign in
+                                try {
+                                    if (error != null && (error.contains("user_already_exists") || error.toLowerCase().contains("already exists") || error.toLowerCase().contains("user already"))) {
+                                        Log.w(TAG, "SignUp returned user_already_exists, attempting sign-in instead");
+                                        SupabaseClient.this.signIn(email, password, new ApiCallback() {
+                                            @Override
+                                            public void onSuccess(JSONObject signinResp) {
+                                                try {
+                                                    String signinToken = null;
+                                                    if (signinResp.has("access_token")) {
+                                                        signinToken = signinResp.optString("access_token", null);
+                                                    } else if (signinResp.has("session")) {
+                                                        JSONObject session = signinResp.optJSONObject("session");
+                                                        if (session != null) signinToken = session.optString("access_token", null);
+                                                    } else if (signinResp.has("data")) {
+                                                        JSONObject data = signinResp.optJSONObject("data");
+                                                        if (data != null) signinToken = data.optString("access_token", null);
+                                                    }
 
-                                        if (signinToken != null && !signinToken.isEmpty()) {
-                                            doProfileInsert.accept(signinToken);
-                                        } else {
-                                            // Can't get token; return signup response
-                                            callback.onSuccess(signupResp);
-                                        }
-                                    } catch (Exception e) {
-                                        Log.e(TAG, "Error extracting token from signin response", e);
-                                        callback.onSuccess(signupResp);
+                                                    if (signinToken != null && !signinToken.isEmpty()) {
+                                                        // Insert or patch profile using token
+                                                        JSONObject signupResp = new JSONObject();
+                                                        signupResp.put("message", "User existed; signed in");
+                                                        try {
+                                                            JSONObject profile = new JSONObject();
+                                                            profile.put("email", email);
+                                                            profile.put("first_name", firstName != null ? firstName : JSONObject.NULL);
+                                                            profile.put("last_name", lastName != null ? lastName : JSONObject.NULL);
+                                                            profile.put("role", role != null ? role : JSONObject.NULL);
+                                                            profile.put("dob", (dob != null && !dob.isEmpty()) ? dob : JSONObject.NULL);
+                                                            profile.put("phone", phone != null ? phone : JSONObject.NULL);
+
+                                                            RequestBody reqBody = RequestBody.create(profile.toString(), MediaType.parse("application/json"));
+                                                            Request req = new Request.Builder()
+                                                                    .url(supabaseUrl + "/rest/v1/profiles")
+                                                                    .post(reqBody)
+                                                                    .addHeader("apikey", supabaseKey)
+                                                                    .addHeader("Authorization", "Bearer " + signinToken)
+                                                                    .addHeader("Content-Type", "application/json")
+                                                                    .addHeader("Prefer", "return=representation")
+                                                                    .build();
+
+                                                            client.newCall(req).enqueue(new Callback() {
+                                                                @Override
+                                                                public void onFailure(Call call, IOException e) {
+                                                                    Log.w(TAG, "Profile insert after sign-in failed", e);
+                                                                    callback.onSuccess(signupResp);
+                                                                }
+
+                                                                @Override
+                                                                public void onResponse(Call call, Response response) throws IOException {
+                                                                    try {
+                                                                        String respBody = response.body().string();
+                                                                        if (response.isSuccessful()) {
+                                                                            JSONObject insertJson = null;
+                                                                            String trimmed = respBody != null ? respBody.trim() : "";
+                                                                            if (trimmed.startsWith("[")) {
+                                                                                JSONArray arr = new JSONArray(trimmed);
+                                                                                if (arr.length() > 0) insertJson = arr.getJSONObject(0);
+                                                                                else insertJson = new JSONObject();
+                                                                            } else if (trimmed.startsWith("{")) {
+                                                                                insertJson = new JSONObject(trimmed);
+                                                                            } else {
+                                                                                insertJson = new JSONObject();
+                                                                            }
+                                                                            JSONObject merged = new JSONObject();
+                                                                            merged.put("signup", signupResp);
+                                                                            merged.put("profile", insertJson);
+                                                                            callback.onSuccess(merged);
+                                                                        } else {
+                                                                            callback.onSuccess(signupResp);
+                                                                        }
+                                                                    } catch (Exception e) {
+                                                                        Log.e(TAG, "Error parsing profile insert response after sign-in", e);
+                                                                        callback.onSuccess(signupResp);
+                                                                    }
+                                                                }
+                                                            });
+                                                        } catch (Exception e) {
+                                                            Log.e(TAG, "Error performing profile insert after sign-in", e);
+                                                            callback.onSuccess(signupResp);
+                                                        }
+                                                    } else {
+                                                        callback.onError("Unable to sign in existing user: no token returned");
+                                                    }
+                                                } catch (Exception e) {
+                                                    Log.e(TAG, "Error extracting token from signin response (after existing user)", e);
+                                                    callback.onError("Sign-in after existing user failed");
+                                                }
+                                            }
+
+                                            @Override
+                                            public void onError(String error) {
+                                                Log.w(TAG, "Sign-in attempt for existing user failed: " + error);
+                                                callback.onError(error);
+                                            }
+                                        });
+                                        return;
                                     }
+                                } catch (Exception ex) {
+                                    Log.e(TAG, "Error handling signUp error fallback", ex);
                                 }
 
-                                @Override
-                                public void onError(String error) {
-                                    // Propagate signup success but include sign-in error
-                                    Log.w(TAG, "Sign-in after signup failed: " + error);
-                                    callback.onError(error);
-                                }
-                            });
-                        }
+                                // Default: propagate signup error
+                                callback.onError(error);
+                            }
+                        });
                     } catch (Exception e) {
-                        Log.e(TAG, "Error finishing signup/profile insert", e);
-                        callback.onError("Signup succeeded but post-processing failed");
+                        Log.e(TAG, "Error handling verifyOtp success response", e);
+                        callback.onError("OTP verification succeeded but post-processing failed");
                     }
                 }
 
                 @Override
                 public void onError(String error) {
-                    // Propagate signup error
-                    callback.onError(error);
+                    Log.w(TAG, "verifyOtp failed: " + error);
+                    callback.onError("OTP verification failed: " + error);
                 }
             });
         } catch (Exception e) {
             Log.e(TAG, "Error creating completeSignup request", e);
             callback.onError("Failed to create request");
+        }
+    }
+
+    /**
+     * Get bookings for the current user (tenant view)
+     */
+    public void getUserBookings(ApiCallback callback) {
+        String userId = getCurrentUserId();
+        
+        if (userId == null || userId.isEmpty()) {
+            callback.onError("User not authenticated");
+            return;
+        }
+        
+        Log.d(TAG, "Fetching bookings for user: " + userId);
+        
+        String url = supabaseUrl + "/rest/v1/bookings?tenant_id=eq." + userId + "&select=*,boarding_houses(*)&order=created_at.desc";
+        
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", supabaseKey)
+                .addHeader("Authorization", "Bearer " + supabaseKey)
+                .addHeader("Content-Type", "application/json")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "getUserBookings request failed", e);
+                callback.onError("Network error: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String bodyString = response.body().string();
+                    Log.d(TAG, "getUserBookings response (" + response.code() + "): " + bodyString);
+                    
+                    if (response.isSuccessful()) {
+                        JSONArray bookingsArray = new JSONArray(bodyString);
+                        JSONObject result = new JSONObject();
+                        result.put("data", bookingsArray);
+                        result.put("count", bookingsArray.length());
+                        callback.onSuccess(result);
+                    } else {
+                        callback.onError("Failed to fetch bookings: HTTP " + response.code());
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing getUserBookings response", e);
+                    callback.onError("Failed to parse response: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    /**
+     * Get favorites for the current user
+     */
+    public void getUserFavorites(ApiCallback callback) {
+        String userId = getCurrentUserId();
+        
+        if (userId == null || userId.isEmpty()) {
+            callback.onError("User not authenticated");
+            return;
+        }
+        
+        Log.d(TAG, "Fetching favorites for user: " + userId);
+        
+        String url = supabaseUrl + "/rest/v1/favorites?user_id=eq." + userId + "&select=*,boarding_houses(*)&order=created_at.desc";
+        
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", supabaseKey)
+                .addHeader("Authorization", "Bearer " + supabaseKey)
+                .addHeader("Content-Type", "application/json")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "getUserFavorites request failed", e);
+                callback.onError("Network error: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String bodyString = response.body().string();
+                    Log.d(TAG, "getUserFavorites response (" + response.code() + "): " + bodyString);
+                    
+                    if (response.isSuccessful()) {
+                        JSONArray favoritesArray = new JSONArray(bodyString);
+                        JSONObject result = new JSONObject();
+                        result.put("data", favoritesArray);
+                        result.put("count", favoritesArray.length());
+                        callback.onSuccess(result);
+                    } else {
+                        callback.onError("Failed to fetch favorites: HTTP " + response.code());
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing getUserFavorites response", e);
+                    callback.onError("Failed to parse response: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    /**
+     * Get notifications for the current user
+     */
+    public void getUserNotifications(ApiCallback callback) {
+        String userId = getCurrentUserId();
+        
+        if (userId == null || userId.isEmpty()) {
+            callback.onError("User not authenticated");
+            return;
+        }
+        
+        Log.d(TAG, "Fetching notifications for user: " + userId);
+        
+        String url = supabaseUrl + "/rest/v1/notifications?user_id=eq." + userId + "&select=*&order=created_at.desc&limit=50";
+        
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("apikey", supabaseKey)
+                .addHeader("Authorization", "Bearer " + supabaseKey)
+                .addHeader("Content-Type", "application/json")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "getUserNotifications request failed", e);
+                callback.onError("Network error: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    String bodyString = response.body().string();
+                    Log.d(TAG, "getUserNotifications response (" + response.code() + "): " + bodyString);
+                    
+                    if (response.isSuccessful()) {
+                        JSONArray notificationsArray = new JSONArray(bodyString);
+                        JSONObject result = new JSONObject();
+                        result.put("data", notificationsArray);
+                        result.put("count", notificationsArray.length());
+                        callback.onSuccess(result);
+                    } else {
+                        callback.onError("Failed to fetch notifications: HTTP " + response.code());
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing getUserNotifications response", e);
+                    callback.onError("Failed to parse response: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    /**
+     * Add a property to favorites
+     */
+    public void addToFavorites(String listingId, ApiCallback callback) {
+        String userId = getCurrentUserId();
+        
+        if (userId == null || userId.isEmpty()) {
+            callback.onError("User not authenticated");
+            return;
+        }
+        
+        try {
+            JSONObject requestBody = new JSONObject();
+            requestBody.put("user_id", userId);
+            requestBody.put("listing_id", listingId);
+            
+            RequestBody body = RequestBody.create(requestBody.toString(), MediaType.parse("application/json"));
+            
+            Request request = new Request.Builder()
+                    .url(supabaseUrl + "/rest/v1/favorites")
+                    .post(body)
+                    .addHeader("apikey", supabaseKey)
+                    .addHeader("Authorization", "Bearer " + supabaseKey)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=representation")
+                    .build();
+
+            client.newCall(request).enqueue(createGenericCallback(callback));
+        } catch (Exception e) {
+            Log.e(TAG, "Error creating addToFavorites request", e);
+            callback.onError("Failed to add to favorites: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Remove a property from favorites
+     */
+    public void removeFromFavorites(String listingId, ApiCallback callback) {
+        String userId = getCurrentUserId();
+        
+        if (userId == null || userId.isEmpty()) {
+            callback.onError("User not authenticated");
+            return;
+        }
+        
+        String url = supabaseUrl + "/rest/v1/favorites?user_id=eq." + userId + "&listing_id=eq." + listingId;
+        
+        Request request = new Request.Builder()
+                .url(url)
+                .delete()
+                .addHeader("apikey", supabaseKey)
+                .addHeader("Authorization", "Bearer " + supabaseKey)
+                .addHeader("Content-Type", "application/json")
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e(TAG, "removeFromFavorites request failed", e);
+                callback.onError("Network error: " + e.getMessage());
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                try {
+                    if (response.isSuccessful()) {
+                        JSONObject result = new JSONObject();
+                        result.put("success", true);
+                        callback.onSuccess(result);
+                    } else {
+                        callback.onError("Failed to remove from favorites: HTTP " + response.code());
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error handling removeFromFavorites response", e);
+                    callback.onError("Failed to process response: " + e.getMessage());
+                }
+            }
+        });
+    }
+
+    /**
+     * Create a new booking request
+     */
+    public void createBooking(String listingId, String startDate, String endDate, double totalAmount, ApiCallback callback) {
+        String userId = getCurrentUserId();
+        
+        if (userId == null || userId.isEmpty()) {
+            callback.onError("User not authenticated");
+            return;
+        }
+        
+        try {
+            JSONObject requestBody = new JSONObject();
+            requestBody.put("listing_id", listingId);
+            requestBody.put("tenant_id", userId);
+            requestBody.put("start_date", startDate);
+            requestBody.put("end_date", endDate);
+            requestBody.put("total_amount", totalAmount);
+            requestBody.put("status", "pending");
+            
+            RequestBody body = RequestBody.create(requestBody.toString(), MediaType.parse("application/json"));
+            
+            Request request = new Request.Builder()
+                    .url(supabaseUrl + "/rest/v1/bookings")
+                    .post(body)
+                    .addHeader("apikey", supabaseKey)
+                    .addHeader("Authorization", "Bearer " + supabaseKey)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=representation")
+                    .build();
+
+            client.newCall(request).enqueue(createGenericCallback(callback));
+        } catch (Exception e) {
+            Log.e(TAG, "Error creating booking request", e);
+            callback.onError("Failed to create booking: " + e.getMessage());
         }
     }
 
