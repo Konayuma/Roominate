@@ -9,6 +9,7 @@ import android.view.ViewGroup;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.content.Intent;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -62,7 +63,10 @@ public class MyListingsFragment extends Fragment {
 
         // Initialize adapter FIRST before loading data
         adapter = new PropertyAdapter(getContext(), properties, property -> {
-            // TODO: Navigate to edit property
+            // Navigate to EditPropertyActivity to edit the listing
+            Intent intent = new Intent(getContext(), EditPropertyActivity.class);
+            intent.putExtra("property_id", property.getId());
+            startActivity(intent);
         });
         recyclerView.setAdapter(adapter);
         
@@ -128,18 +132,17 @@ public class MyListingsFragment extends Fragment {
                 
                 Request.Builder requestBuilder = new Request.Builder()
                     .url(url)
-                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
                     .get();
-                
-                // Use access token if available for authenticated RLS
+
+                // Centralized header wiring: prefer user access_token when available
+                requestBuilder = com.roominate.services.SupabaseClient.addAuthHeaders(requestBuilder);
+
                 if (accessToken != null && !accessToken.isEmpty()) {
-                    requestBuilder.addHeader("Authorization", "Bearer " + accessToken);
                     Log.d(TAG, "Using authenticated request with access token");
                 } else {
-                    requestBuilder.addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY);
                     Log.w(TAG, "Using anon key - RLS may block results");
                 }
-                
+
                 Request request = requestBuilder.build();
                 Response response = client.newCall(request).execute();
                 

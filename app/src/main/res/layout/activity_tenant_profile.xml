@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5">
+    android:background="@color/white">
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
@@ -112,174 +112,280 @@
                     android:orientation="vertical"
                     android:padding="16dp">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Personal Information"
-                        android:textSize="18sp"
-                        android:textStyle="bold"
-                        android:textColor="#000000"
-                        android:layout_marginBottom="16dp" />
-
-                    <!-- First Name -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/firstNameLayout"
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="First Name"
-                        android:layout_marginBottom="12dp"
-                        app:startIconDrawable="@drawable/ic_user"
-                        app:startIconTint="@color/black"
-                        app:boxBackgroundMode="outline"
-                        app:boxBackgroundColor="@android:color/transparent"
-                        app:boxStrokeColor="@color/black"
-                        app:hintTextColor="#666666"
-                        android:textColorHint="#999999"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="16dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/firstNameEditText"
-                            android:layout_width="match_parent"
-                            android:layout_height="56dp"
-                            android:inputType="textPersonName"
-                            android:textSize="16sp"
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Personal Information"
+                            android:textSize="18sp"
+                            android:textStyle="bold"
                             android:textColor="#000000" />
 
-                    </com.google.android.material.textfield.TextInputLayout>
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/editButton"
+                            style="@style/Widget.Material3.Button.OutlinedButton.Icon"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="Edit"
+                            android:textSize="14sp"
+                            app:icon="@drawable/ic_edit"
+                            app:iconSize="18dp"
+                            app:strokeColor="@color/primary_blue"
+                            android:textColor="@color/primary_blue" />
 
-                    <!-- Last Name -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/lastNameLayout"
+                    </LinearLayout>
+
+                    <!-- Full Name Display -->
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="Last Name"
-                        android:layout_marginBottom="12dp"
-                        app:startIconDrawable="@drawable/ic_user"
-                        app:startIconTint="@color/black"
-                        app:boxBackgroundMode="outline"
-                        app:boxBackgroundColor="@android:color/transparent"
-                        app:boxStrokeColor="@color/black"
-                        app:hintTextColor="#666666"
-                        android:textColorHint="#999999"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingTop="12dp"
+                        android:paddingBottom="12dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/lastNameEditText"
-                            android:layout_width="match_parent"
-                            android:layout_height="56dp"
-                            android:inputType="textPersonName"
-                            android:textSize="16sp"
-                            android:textColor="#000000" />
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_user"
+                            android:tint="@color/primary_blue"
+                            android:layout_marginEnd="16dp"
+                            android:contentDescription="Name icon" />
 
-                    </com.google.android.material.textfield.TextInputLayout>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
 
-                    <!-- Email -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/emailLayout"
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Full Name"
+                                android:textSize="12sp"
+                                android:textColor="#666666" />
+
+                            <TextView
+                                android:id="@+id/fullNameTextView"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Not set"
+                                android:textSize="16sp"
+                                android:textColor="#000000"
+                                android:layout_marginTop="4dp" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="#EEEEEE"
+                        android:layout_marginStart="40dp" />
+
+                    <!-- Email Display -->
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="Email"
-                        android:layout_marginBottom="12dp"
-                        app:startIconDrawable="@drawable/ic_email"
-                        app:startIconTint="@color/black"
-                        app:boxBackgroundMode="outline"
-                        app:boxBackgroundColor="@android:color/transparent"
-                        app:boxStrokeColor="@color/black"
-                        app:hintTextColor="#666666"
-                        android:textColorHint="#999999"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingTop="12dp"
+                        android:paddingBottom="12dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/emailEditText"
-                            android:layout_width="match_parent"
-                            android:layout_height="56dp"
-                            android:inputType="textEmailAddress"
-                            android:enabled="false"
-                            android:textSize="16sp"
-                            android:textColor="#000000" />
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_email"
+                            android:tint="@color/primary_blue"
+                            android:layout_marginEnd="16dp"
+                            android:contentDescription="Email icon" />
 
-                    </com.google.android.material.textfield.TextInputLayout>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
 
-                    <!-- Phone -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/phoneLayout"
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Email Address"
+                                android:textSize="12sp"
+                                android:textColor="#666666" />
+
+                            <TextView
+                                android:id="@+id/emailTextView"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="user@email.com"
+                                android:textSize="16sp"
+                                android:textColor="#000000"
+                                android:layout_marginTop="4dp" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="#EEEEEE"
+                        android:layout_marginStart="40dp" />
+
+                    <!-- Phone Display -->
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="Phone Number"
-                        android:layout_marginBottom="12dp"
-                        app:startIconDrawable="@drawable/ic_phone"
-                        app:startIconTint="@color/black"
-                        app:boxBackgroundMode="outline"
-                        app:boxBackgroundColor="@android:color/transparent"
-                        app:boxStrokeColor="@color/black"
-                        app:hintTextColor="#666666"
-                        android:textColorHint="#999999"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingTop="12dp"
+                        android:paddingBottom="12dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/phoneEditText"
-                            android:layout_width="match_parent"
-                            android:layout_height="56dp"
-                            android:inputType="phone"
-                            android:textSize="16sp"
-                            android:textColor="#000000" />
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_phone"
+                            android:tint="@color/primary_blue"
+                            android:layout_marginEnd="16dp"
+                            android:contentDescription="Phone icon" />
 
-                    </com.google.android.material.textfield.TextInputLayout>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
 
-                    <!-- Occupation -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/occupationLayout"
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Phone Number"
+                                android:textSize="12sp"
+                                android:textColor="#666666" />
+
+                            <TextView
+                                android:id="@+id/phoneTextView"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Not set"
+                                android:textSize="16sp"
+                                android:textColor="#000000"
+                                android:layout_marginTop="4dp" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="#EEEEEE"
+                        android:layout_marginStart="40dp" />
+
+                    <!-- Occupation Display -->
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="Occupation"
-                        app:startIconDrawable="@drawable/ic_work"
-                        app:startIconTint="@color/black"
-                        app:boxBackgroundMode="outline"
-                        app:boxBackgroundColor="@android:color/transparent"
-                        app:boxStrokeColor="@color/black"
-                        app:hintTextColor="#666666"
-                        android:textColorHint="#999999"
-                        app:boxCornerRadiusTopStart="12dp"
-                        app:boxCornerRadiusTopEnd="12dp"
-                        app:boxCornerRadiusBottomStart="12dp"
-                        app:boxCornerRadiusBottomEnd="12dp">
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingTop="12dp"
+                        android:paddingBottom="12dp">
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/occupationEditText"
-                            android:layout_width="match_parent"
-                            android:layout_height="56dp"
-                            android:inputType="text"
-                            android:textSize="16sp"
-                            android:textColor="#000000" />
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_work"
+                            android:tint="@color/primary_blue"
+                            android:layout_marginEnd="16dp"
+                            android:contentDescription="Occupation icon" />
 
-                    </com.google.android.material.textfield.TextInputLayout>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Occupation"
+                                android:textSize="12sp"
+                                android:textColor="#666666" />
+
+                            <TextView
+                                android:id="@+id/occupationTextView"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Not set"
+                                android:textSize="16sp"
+                                android:textColor="#000000"
+                                android:layout_marginTop="4dp" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="#EEEEEE"
+                        android:layout_marginStart="40dp" />
+
+                    <!-- Member Since Display -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingTop="12dp"
+                        android:paddingBottom="4dp">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_calendar"
+                            android:tint="@color/primary_blue"
+                            android:layout_marginEnd="16dp"
+                            android:contentDescription="Calendar icon" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Member Since"
+                                android:textSize="12sp"
+                                android:textColor="#666666" />
+
+                            <TextView
+                                android:id="@+id/memberSinceDisplayTextView"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="January 2024"
+                                android:textSize="16sp"
+                                android:textColor="#000000"
+                                android:layout_marginTop="4dp" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
 
                 </LinearLayout>
 
             </com.google.android.material.card.MaterialCardView>
 
             <!-- Action Buttons -->
-            <Button
-                android:id="@+id/saveButton"
-                style="@style/Widget.Roominate.Button.Primary"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:text="Save Changes"
-                android:textSize="16sp"
-                android:layout_marginBottom="12dp" />
-
             <Button
                 android:id="@+id/logoutButton"
                 style="@style/Widget.Roominate.Button.Secondary"

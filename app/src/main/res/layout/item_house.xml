@@ -55,7 +55,7 @@
                     android:id="@+id/housePrice"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="₱6,500/mo"
+                    android:text="K6,500/mo"
                     android:textSize="14sp"
                     android:textStyle="bold"
                     android:textColor="#000000" />

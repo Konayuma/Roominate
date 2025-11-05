@@ -19,12 +19,18 @@ public class Property {
     private List<String> imageUrls;
     private List<String> amenities;
     private String thumbnailUrl; // Keep for grid view if needed
+    private double latitude;
+    private double longitude;
+    private int availableRooms;
 
     // Constructors
     public Property() {
         this.imageUrls = new ArrayList<>();
         this.amenities = new ArrayList<>();
         this.status = "draft";
+        this.latitude = 0.0;
+        this.longitude = 0.0;
+        this.availableRooms = 0;
     }
 
     // Getters and Setters
@@ -66,6 +72,15 @@ public class Property {
     }
     public void setThumbnailUrl(String thumbnailUrl) { this.thumbnailUrl = thumbnailUrl; }
 
+    public double getLatitude() { return latitude; }
+    public void setLatitude(double latitude) { this.latitude = latitude; }
+
+    public double getLongitude() { return longitude; }
+    public void setLongitude(double longitude) { this.longitude = longitude; }
+
+    public int getAvailableRooms() { return availableRooms; }
+    public void setAvailableRooms(int availableRooms) { this.availableRooms = availableRooms; }
+
 
     // JSON Serialization/Deserialization
     public static Property fromJson(JSONObject jsonObject) throws JSONException {
@@ -78,6 +93,9 @@ public class Property {
         property.setMonthlyRate(jsonObject.optDouble("monthly_rate", 0.0));
         property.setSecurityDeposit(jsonObject.optDouble("security_deposit", 0.0));
         property.setStatus(jsonObject.optString("status", "draft"));
+        property.setLatitude(jsonObject.optDouble("latitude", 0.0));
+        property.setLongitude(jsonObject.optDouble("longitude", 0.0));
+        property.setAvailableRooms(jsonObject.optInt("available_rooms", 0));
 
         // Parse image_urls array
         JSONArray imageUrlsJson = jsonObject.optJSONArray("image_urls");
@@ -115,6 +133,9 @@ public class Property {
         jsonObject.put("monthly_rate", monthlyRate);
         jsonObject.put("security_deposit", securityDeposit);
         jsonObject.put("status", status);
+        jsonObject.put("latitude", latitude);
+        jsonObject.put("longitude", longitude);
+        jsonObject.put("available_rooms", availableRooms);
         jsonObject.put("image_urls", new JSONArray(imageUrls));
         jsonObject.put("amenities", new JSONArray(amenities));
         return jsonObject;

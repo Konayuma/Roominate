@@ -94,7 +94,7 @@ public class FavoritesFragment extends Fragment {
     }
 
     private void loadUserId() {
-        SharedPreferences prefs = requireActivity().getSharedPreferences("user_session", Context.MODE_PRIVATE);
+        SharedPreferences prefs = requireActivity().getSharedPreferences("roominate_prefs", Context.MODE_PRIVATE);
         userId = prefs.getString("user_id", null);
         
         if (userId == null || userId.isEmpty()) {
@@ -116,18 +116,21 @@ public class FavoritesFragment extends Fragment {
                 String supabaseUrl = com.roominate.BuildConfig.SUPABASE_URL;
                 String supabaseKey = com.roominate.BuildConfig.SUPABASE_ANON_KEY;
                 
-                // Query favorites with boarding house details
-                String url = supabaseUrl + "/rest/v1/favorites?user_id=eq." + userId + "&select=*,boarding_houses(*)";
+                // Query favorites with boarding house details using proper join
+                // The 'boarding_house_id' field in favorites table references the boarding_houses table
+                String url = supabaseUrl + "/rest/v1/favorites?user_id=eq." + userId + "&select=*,boarding_houses(id,title,address,price_per_month,name)";
                 
-                Request request = new Request.Builder()
+                Request.Builder reqBuilder = new Request.Builder()
                         .url(url)
-                        .get()
-                        .addHeader("apikey", supabaseKey)
-                        .addHeader("Authorization", "Bearer " + supabaseKey)
-                        .build();
+                        .get();
+
+                // Add authentication headers
+                reqBuilder = com.roominate.services.SupabaseClient.addAuthHeaders(reqBuilder);
+
+                Request request = reqBuilder.build();
                 
                 Response response = httpClient.newCall(request).execute();
-                String responseBody = response.body().string();
+                String responseBody = response.body() != null ? response.body().string() : "";
                 
                 Log.d(TAG, "Favorites response: " + responseBody);
                 
@@ -138,22 +141,32 @@ public class FavoritesFragment extends Fragment {
                     for (int i = 0; i < favoritesArray.length(); i++) {
                         JSONObject favoriteObj = favoritesArray.getJSONObject(i);
                         
+                        // Check both possible field names for the boarding house object
+                        JSONObject bhObj = null;
                         if (favoriteObj.has("boarding_houses")) {
-                            JSONObject bhObj = favoriteObj.getJSONObject("boarding_houses");
-                            
+                            bhObj = favoriteObj.optJSONObject("boarding_houses");
+                        }
+                        
+                        if (bhObj != null) {
                             String id = bhObj.optString("id", "");
                             String title = bhObj.optString("title", "");
+                            if (title == null || title.isEmpty()) {
+                                title = bhObj.optString("name", "");
+                            }
                             String address = bhObj.optString("address", "");
                             double price = bhObj.optDouble("price_per_month", 0);
-                            String thumbnailUrl = ""; // TODO: Get from properties_media
                             
                             Property property = new Property();
                             property.setId(id);
                             property.setName(title);
                             property.setAddress(address);
                             property.setMonthlyRate((int) price);
-                            property.setThumbnailUrl(thumbnailUrl);
+                            property.setThumbnailUrl(""); // TODO: Get from properties_media
                             properties.add(property);
+                            
+                            Log.d(TAG, "Added property: " + title + " - " + id);
+                        } else {
+                            Log.w(TAG, "No boarding_houses data in favorite object at index " + i);
                         }
                     }
                     
@@ -163,6 +176,9 @@ public class FavoritesFragment extends Fragment {
                         adapter.notifyDataSetChanged();
                         updateResultsCount(properties.size());
                         
+                        // Load thumbnails from properties_media table
+                        loadPropertyThumbnails();
+                        
                         if (properties.isEmpty()) {
                             showEmptyState();
                         } else {
@@ -170,8 +186,9 @@ public class FavoritesFragment extends Fragment {
                         }
                     });
                 } else {
+                    Log.e(TAG, "Failed response: " + response.code() + " - " + responseBody);
                     new Handler(Looper.getMainLooper()).post(() -> {
-                        Toast.makeText(getContext(), "Failed to load favorites", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), "Failed to load favorites (Code: " + response.code() + ")", Toast.LENGTH_SHORT).show();
                         showEmptyState();
                     });
                 }
@@ -207,6 +224,33 @@ public class FavoritesFragment extends Fragment {
     private void updateResultsCount(int count) {
         String text = count == 1 ? "1 saved property" : count + " saved properties";
         resultsCount.setText(text);
+    }
+    
+    /**
+     * Load thumbnail images for all favorite properties in background
+     */
+    private void loadPropertyThumbnails() {
+        new Thread(() -> {
+            for (int i = 0; i < favoriteProperties.size(); i++) {
+                Property property = favoriteProperties.get(i);
+                String propertyId = property.getId();
+                
+                if (propertyId != null && !propertyId.isEmpty()) {
+                    String thumbnailUrl = SupabaseClient.getInstance().getPropertyThumbnailSync(propertyId);
+                    if (thumbnailUrl != null && !thumbnailUrl.isEmpty()) {
+                        property.setThumbnailUrl(thumbnailUrl);
+                        
+                        // Notify adapter on UI thread
+                        final int position = i;
+                        new Handler(Looper.getMainLooper()).post(() -> {
+                            if (adapter != null) {
+                                adapter.notifyItemChanged(position);
+                            }
+                        });
+                    }
+                }
+            }
+        }).start();
     }
 
     @Override

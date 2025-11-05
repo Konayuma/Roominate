@@ -6,12 +6,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.CAMERA" />
 
     <application
+        android:name=".RoominateApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -22,6 +23,17 @@
         android:theme="@style/Theme.Roominate.Transparent"
         android:usesCleartextTraffic="true"
         tools:targetApi="31">
+        
+        <!-- FileProvider for camera captured images -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         
         <!-- Splash Screen - Entry Point -->
         <activity
@@ -78,6 +90,10 @@
         <activity android:name=".activities.owner.ManageListingsActivity" />
         <activity android:name=".activities.owner.InquiriesActivity" />
         <activity android:name=".activities.owner.OwnerProfileActivity" />
+        <activity android:name=".activities.owner.BookingDetailsActivity" />
+        
+        <!-- Common Activities -->
+        <activity android:name=".activities.NotificationsActivity" />
         
         <!-- Admin Activities -->
         <activity android:name=".activities.admin.AdminDashboardActivity" />

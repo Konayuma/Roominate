@@ -312,6 +312,13 @@ public class TenantDashboardActivity extends AppCompatActivity implements Naviga
         }
     }
     
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Refresh profile data when returning from profile activity
+        loadUserProfile();
+    }
+    
     // Public method to open drawer from fragments
     public void openDrawer() {
         if (drawerLayout != null) {

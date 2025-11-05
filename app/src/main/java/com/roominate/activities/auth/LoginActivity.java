@@ -1,7 +1,9 @@
 package com.roominate.activities.auth;
 
+import android.Manifest;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
@@ -10,7 +12,10 @@ import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import com.roominate.R;
 import com.roominate.services.SupabaseClient;
 import org.json.JSONArray;
@@ -25,6 +30,8 @@ public class LoginActivity extends AppCompatActivity {
     private TextView registerTextView;
     private TextView forgotPasswordTextView;
     private ProgressBar progressBar;
+    
+    private ActivityResultLauncher<String[]> locationPermissionLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,8 +51,26 @@ public class LoginActivity extends AppCompatActivity {
             android.util.Log.w("LoginActivity", "Failed to init SupabaseClient context", e);
         }
 
+        setupLocationPermissionLauncher();
         initializeViews();
         setupListeners();
+    }
+    
+    private void setupLocationPermissionLauncher() {
+        locationPermissionLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestMultiplePermissions(),
+            permissions -> {
+                boolean fineLocationGranted = Boolean.TRUE.equals(permissions.get(Manifest.permission.ACCESS_FINE_LOCATION));
+                boolean coarseLocationGranted = Boolean.TRUE.equals(permissions.get(Manifest.permission.ACCESS_COARSE_LOCATION));
+                
+                if (fineLocationGranted || coarseLocationGranted) {
+                    Log.d("LoginActivity", "Location permission granted");
+                } else {
+                    Log.d("LoginActivity", "Location permission denied");
+                    Toast.makeText(this, "Location permission denied. Some features may be limited.", Toast.LENGTH_LONG).show();
+                }
+            }
+        );
     }
 
     private void initializeViews() {
@@ -252,6 +277,9 @@ public class LoginActivity extends AppCompatActivity {
     }
 
     private void redirectToDashboard(String userType) {
+        // Request location permission before redirecting
+        requestLocationPermission();
+        
         // Check if owner is using tenant view
         SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
         boolean ownerUsingTenantView = prefs.getBoolean("owner_using_tenant_view", false);
@@ -282,5 +310,23 @@ public class LoginActivity extends AppCompatActivity {
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(intent);
         finish();
+    }
+    
+    private void requestLocationPermission() {
+        // Check if we already have permission
+        boolean hasFineLocation = ContextCompat.checkSelfPermission(this, 
+            Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        boolean hasCoarseLocation = ContextCompat.checkSelfPermission(this, 
+            Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        
+        if (!hasFineLocation || !hasCoarseLocation) {
+            // Request both location permissions
+            locationPermissionLauncher.launch(new String[]{
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            });
+        } else {
+            Log.d("LoginActivity", "Location permissions already granted");
+        }
     }
 }

@@ -36,6 +36,12 @@ public class OwnerHomeFragment extends Fragment {
     private List<Property> properties = new ArrayList<>();
     private ImageButton menuButton;
     private TextView emptyStateText;
+    
+    // Statistics views
+    private TextView propertiesCountText;
+    private TextView totalBookingsText;
+    private TextView pendingBookingsText;
+    private TextView totalRevenueText;
 
     @Nullable
     @Override
@@ -46,6 +52,12 @@ public class OwnerHomeFragment extends Fragment {
         emptyStateText = v.findViewById(R.id.emptyStateText);
         recyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         
+        // Initialize statistics views - use IDs from actual layout
+        propertiesCountText = v.findViewById(R.id.totalListings);
+        totalBookingsText = v.findViewById(R.id.totalBookings);
+        pendingBookingsText = null;  // Not present in layout
+        totalRevenueText = null;     // Not present in layout
+        
         menuButton = v.findViewById(R.id.menuButton);
         menuButton.setOnClickListener(view -> {
             // Open drawer from parent activity
@@ -55,18 +67,63 @@ public class OwnerHomeFragment extends Fragment {
         });
 
         adapter = new PropertyAdapter(getContext(), properties, property -> {
-            // Navigate to property details or edit
-            Intent i = new Intent(getActivity(), BoardingHouseDetailsActivity.class);
-            i.putExtra("boarding_house_id", property.getId());
+            // Navigate to edit property
+            Intent i = new Intent(getActivity(), EditPropertyActivity.class);
+            i.putExtra("property_id", property.getId());
             startActivity(i);
         });
         
         recyclerView.setAdapter(adapter);
         
-        // Load properties from database
+        // Load statistics and properties
+        loadOwnerStats();
         loadOwnerProperties();
 
         return v;
+    }
+    
+    private void loadOwnerStats() {
+        Log.d(TAG, "Loading owner statistics...");
+        
+        SupabaseClient.getInstance().getOwnerStats(new SupabaseClient.ApiCallback() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                if (getActivity() == null || !isAdded()) return;
+                
+                getActivity().runOnUiThread(() -> {
+                    try {
+                        int propertiesCount = response.optInt("properties_count", 0);
+                        int totalBookings = response.optInt("total_bookings", 0);
+                        int pendingBookings = response.optInt("pending_bookings", 0);
+                        double totalRevenue = response.optDouble("total_revenue", 0.0);
+                        
+                        // Update UI
+                        if (propertiesCountText != null) {
+                            propertiesCountText.setText(String.valueOf(propertiesCount));
+                        }
+                        if (totalBookingsText != null) {
+                            totalBookingsText.setText(String.valueOf(totalBookings));
+                        }
+                        if (pendingBookingsText != null) {
+                            pendingBookingsText.setText(String.valueOf(pendingBookings));
+                        }
+                        if (totalRevenueText != null) {
+                            totalRevenueText.setText(String.format("K%.0f", totalRevenue));
+                        }
+                        
+                        Log.d(TAG, "Statistics loaded: " + propertiesCount + " properties, " + totalBookings + " bookings, K" + totalRevenue + " revenue");
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error parsing statistics", e);
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                Log.e(TAG, "Error loading statistics: " + error);
+                // Silently fail - statistics are not critical
+            }
+        });
     }
 
     private void loadOwnerProperties() {

@@ -7,22 +7,34 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.RatingBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.view.ViewGroup;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.roominate.R;
+import com.roominate.adapters.ReviewsAdapter;
 import com.roominate.models.BoardingHouse;
+import com.roominate.services.SupabaseClient;
+import com.squareup.picasso.Picasso;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.Locale;
 import okhttp3.*;
 import java.io.IOException;
 
@@ -40,6 +52,7 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
     private TextView availableRoomsTextView;
     private ChipGroup amenitiesChipGroup;
     private RecyclerView reviewsRecyclerView;
+    private MaterialButton writeReviewButton;
     private Button contactOwnerButton;
     private Button bookNowButton;
     private FloatingActionButton favoriteButton;
@@ -49,6 +62,8 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
     private String boardingHouseId;
     private String userId;
     private boolean isFavorite = false;
+    private ReviewsAdapter reviewsAdapter;
+    private JSONArray reviewsData;
     private String favoriteId = null;
     private OkHttpClient httpClient;
 
@@ -68,14 +83,22 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
 
         initializeViews();
         setupToolbar();
+        setupReviewsRecyclerView();
         loadBoardingHouseDetails();
         checkFavoriteStatus();
+        loadReviews();
         setupListeners();
     }
     
     private void loadUserId() {
         SharedPreferences prefs = getSharedPreferences("user_session", Context.MODE_PRIVATE);
         userId = prefs.getString("user_id", null);
+        
+        // Also try roominate_prefs
+        if (userId == null || userId.isEmpty()) {
+            prefs = getSharedPreferences("roominate_prefs", Context.MODE_PRIVATE);
+            userId = prefs.getString("user_id", null);
+        }
     }
 
     private void initializeViews() {
@@ -90,10 +113,18 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
         availableRoomsTextView = findViewById(R.id.availableRoomsTextView);
         amenitiesChipGroup = findViewById(R.id.amenitiesChipGroup);
         reviewsRecyclerView = findViewById(R.id.reviewsRecyclerView);
+        writeReviewButton = findViewById(R.id.writeReviewButton);
         contactOwnerButton = findViewById(R.id.contactOwnerButton);
         bookNowButton = findViewById(R.id.bookNowButton);
         favoriteButton = findViewById(R.id.favoriteButton);
         shareButton = findViewById(R.id.shareButton);
+    }
+    
+    private void setupReviewsRecyclerView() {
+        reviewsData = new JSONArray();
+        reviewsAdapter = new ReviewsAdapter(this, reviewsData);
+        reviewsRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        reviewsRecyclerView.setAdapter(reviewsAdapter);
     }
 
     private void setupToolbar() {
@@ -126,15 +157,11 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
                 
                 Request.Builder requestBuilder = new Request.Builder()
                         .url(url)
-                        .get()
-                        .addHeader("apikey", supabaseKey);
-                
-                if (accessToken != null && !accessToken.isEmpty()) {
-                    requestBuilder.addHeader("Authorization", "Bearer " + accessToken);
-                } else {
-                    requestBuilder.addHeader("Authorization", "Bearer " + supabaseKey);
-                }
-                
+                        .get();
+
+                // Centralized header wiring: prefer user's access token when available
+                requestBuilder = com.roominate.services.SupabaseClient.addAuthHeaders(requestBuilder);
+
                 Request request = requestBuilder.build();
                 Response response = httpClient.newCall(request).execute();
                 
@@ -221,13 +248,87 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
 
         nameTextView.setText(boardingHouse.getName());
         addressTextView.setText(boardingHouse.getAddress());
-        priceTextView.setText(String.format("₱%.2f/month", boardingHouse.getPricePerMonth()));
+        priceTextView.setText(String.format("K%.2f/month", boardingHouse.getPricePerMonth()));
         descriptionTextView.setText(boardingHouse.getDescription());
         ratingBar.setRating((float) boardingHouse.getAverageRating());
         ratingCountTextView.setText(String.format("(%d reviews)", boardingHouse.getTotalReviews()));
         availableRoomsTextView.setText(String.format("%d rooms available", boardingHouse.getAvailableRooms()));
 
-        // TODO: Set up image slider, amenities chips, and reviews list
+        // Set up image slider, amenities chips, and reviews list
+        setupImageSlider();
+        setupAmenitiesChips();
+    }
+
+    private void setupImageSlider() {
+        if (boardingHouse == null || boardingHouse.getImageUrls() == null || boardingHouse.getImageUrls().isEmpty()) {
+            // If no images, just set a placeholder
+            imagesViewPager.setAdapter(new ImageSliderAdapter(new java.util.ArrayList<>()));
+            return;
+        }
+        
+        imagesViewPager.setAdapter(new ImageSliderAdapter(boardingHouse.getImageUrls()));
+    }
+
+    private void setupAmenitiesChips() {
+        if (boardingHouse == null || boardingHouse.getAmenities() == null) {
+            return;
+        }
+        
+        amenitiesChipGroup.removeAllViews();
+        for (String amenity : boardingHouse.getAmenities()) {
+            com.google.android.material.chip.Chip chip = new com.google.android.material.chip.Chip(this);
+            chip.setText(amenity);
+            chip.setEnabled(false);
+            amenitiesChipGroup.addView(chip);
+        }
+    }
+
+    /**
+     * Inner class for handling image slider in ViewPager2
+     */
+    private class ImageSliderAdapter extends RecyclerView.Adapter<ImageSliderAdapter.ImageViewHolder> {
+        private java.util.List<String> imageUrls;
+
+        public ImageSliderAdapter(java.util.List<String> imageUrls) {
+            this.imageUrls = imageUrls != null ? imageUrls : new java.util.ArrayList<>();
+        }
+
+        @Override
+        public ImageViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            ImageView imageView = new ImageView(BoardingHouseDetailsActivity.this);
+            imageView.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            ));
+            imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            return new ImageViewHolder(imageView);
+        }
+
+        @Override
+        public void onBindViewHolder(ImageViewHolder holder, int position) {
+            String imageUrl = imageUrls.get(position);
+            Picasso.get()
+                .load(imageUrl)
+                .fit()
+                .centerCrop()
+                .placeholder(android.R.drawable.ic_menu_gallery)
+                .error(android.R.drawable.ic_menu_gallery)
+                .into(holder.imageView);
+        }
+
+        @Override
+        public int getItemCount() {
+            return imageUrls.size();
+        }
+
+        public class ImageViewHolder extends RecyclerView.ViewHolder {
+            ImageView imageView;
+
+            public ImageViewHolder(ImageView itemView) {
+                super(itemView);
+                this.imageView = itemView;
+            }
+        }
     }
 
     private void setupListeners() {
@@ -235,6 +336,124 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
         bookNowButton.setOnClickListener(v -> bookBoardingHouse());
         favoriteButton.setOnClickListener(v -> toggleFavorite());
         shareButton.setOnClickListener(v -> shareBoardingHouse());
+        writeReviewButton.setOnClickListener(v -> showReviewDialog());
+    }
+    
+    private void loadReviews() {
+        if (boardingHouseId == null) {
+            Log.e(TAG, "Cannot load reviews: boardingHouseId is null");
+            return;
+        }
+        
+        SupabaseClient.getInstance().getReviews(boardingHouseId, new SupabaseClient.ApiCallback() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                try {
+                    JSONArray arr = response.optJSONArray("reviews");
+                    if (arr != null) {
+                        reviewsData = arr;
+                        reviewsAdapter.updateReviews(reviewsData);
+                        calculateAverageRating(reviewsData);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing reviews response", e);
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                Log.e(TAG, "Error loading reviews: " + error);
+                runOnUiThread(() -> {
+                    Toast.makeText(BoardingHouseDetailsActivity.this, 
+                        "Failed to load reviews", Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
+    
+    private void calculateAverageRating(JSONArray reviews) {
+        if (reviews == null || reviews.length() == 0) {
+            ratingBar.setRating(0);
+            ratingCountTextView.setText("No reviews yet");
+            return;
+        }
+        
+        float totalRating = 0;
+        for (int i = 0; i < reviews.length(); i++) {
+            try {
+                JSONObject review = reviews.getJSONObject(i);
+                totalRating += review.getInt("rating");
+            } catch (JSONException e) {
+                Log.e(TAG, "Error parsing review rating", e);
+            }
+        }
+        
+        float averageRating = totalRating / reviews.length();
+        ratingBar.setRating(averageRating);
+        ratingCountTextView.setText(String.format(Locale.getDefault(), 
+            "%.1f (%d reviews)", averageRating, reviews.length()));
+    }
+    
+    private void showReviewDialog() {
+        if (userId == null || userId.isEmpty()) {
+            Toast.makeText(this, "Please sign in to write a review", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Inflate dialog layout
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_submit_review, null);
+        RatingBar dialogRatingBar = dialogView.findViewById(R.id.ratingBar);
+        EditText commentEditText = dialogView.findViewById(R.id.commentEditText);
+        
+        new AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setPositiveButton("Submit", (dialog, which) -> {
+                float rating = dialogRatingBar.getRating();
+                String comment = commentEditText.getText().toString().trim();
+                
+                if (rating == 0) {
+                    Toast.makeText(this, "Please select a rating", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                
+                if (comment.isEmpty()) {
+                    Toast.makeText(this, "Please write a comment", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                
+                submitReview((int) rating, comment);
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+    
+    private void submitReview(int rating, String comment) {
+        if (boardingHouseId == null) {
+            Toast.makeText(this, "Error: Property ID not found", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        Log.d(TAG, "submitReview called with boardingHouseId: " + boardingHouseId + ", rating: " + rating + ", comment: " + comment);
+        
+        SupabaseClient.getInstance().submitReview(boardingHouseId, rating, comment, 
+            new SupabaseClient.ApiCallback() {
+                @Override
+                public void onSuccess(JSONObject response) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(BoardingHouseDetailsActivity.this, 
+                            "Review submitted successfully!", Toast.LENGTH_SHORT).show();
+                        loadReviews(); // Reload reviews to show new review
+                    });
+                }
+
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(BoardingHouseDetailsActivity.this, 
+                            "Failed to submit review: " + error, Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
     }
 
     private void contactOwner() {
@@ -270,147 +489,71 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
             return;
         }
         
-        new Thread(() -> {
-            try {
-                String supabaseUrl = com.roominate.BuildConfig.SUPABASE_URL;
-                String supabaseKey = com.roominate.BuildConfig.SUPABASE_ANON_KEY;
-                
-                String url = supabaseUrl + "/rest/v1/favorites?user_id=eq." + userId + "&listing_id=eq." + boardingHouseId;
-                
-                Request request = new Request.Builder()
-                        .url(url)
-                        .get()
-                        .addHeader("apikey", supabaseKey)
-                        .addHeader("Authorization", "Bearer " + supabaseKey)
-                        .build();
-                
-                Response response = httpClient.newCall(request).execute();
-                String responseBody = response.body().string();
-                
-                if (response.isSuccessful()) {
-                    JSONArray favoritesArray = new JSONArray(responseBody);
-                    
-                    if (favoritesArray.length() > 0) {
-                        JSONObject favoriteObj = favoritesArray.getJSONObject(0);
-                        favoriteId = favoriteObj.optString("id");
-                        isFavorite = true;
-                    } else {
-                        isFavorite = false;
-                        favoriteId = null;
-                    }
-                    
-                    new Handler(Looper.getMainLooper()).post(this::updateFavoriteButton);
+        com.roominate.services.SupabaseClient.getInstance().isFavorite(boardingHouseId, new com.roominate.services.SupabaseClient.ApiCallback() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                try {
+                    isFavorite = response.optBoolean("is_favorite", false);
+                    runOnUiThread(() -> updateFavoriteButton());
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing favorite status", e);
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "Error checking favorite status", e);
             }
-        }).start();
+
+            @Override
+            public void onError(String error) {
+                Log.e(TAG, "Error checking favorite status: " + error);
+            }
+        });
     }
     
     private void addFavorite() {
         favoriteButton.setEnabled(false);
         
-        new Thread(() -> {
-            try {
-                String supabaseUrl = com.roominate.BuildConfig.SUPABASE_URL;
-                String supabaseKey = com.roominate.BuildConfig.SUPABASE_ANON_KEY;
-                
-                JSONObject requestBody = new JSONObject();
-                requestBody.put("user_id", userId);
-                requestBody.put("listing_id", boardingHouseId);
-                
-                RequestBody body = RequestBody.create(
-                    requestBody.toString(),
-                    MediaType.parse("application/json")
-                );
-                
-                Request request = new Request.Builder()
-                        .url(supabaseUrl + "/rest/v1/favorites")
-                        .post(body)
-                        .addHeader("apikey", supabaseKey)
-                        .addHeader("Authorization", "Bearer " + supabaseKey)
-                        .addHeader("Content-Type", "application/json")
-                        .addHeader("Prefer", "return=representation")
-                        .build();
-                
-                Response response = httpClient.newCall(request).execute();
-                String responseBody = response.body().string();
-                
-                if (response.isSuccessful()) {
-                    JSONArray resultArray = new JSONArray(responseBody);
-                    if (resultArray.length() > 0) {
-                        JSONObject favoriteObj = resultArray.getJSONObject(0);
-                        favoriteId = favoriteObj.optString("id");
-                        isFavorite = true;
-                        
-                        new Handler(Looper.getMainLooper()).post(() -> {
-                            updateFavoriteButton();
-                            Toast.makeText(this, "Added to favorites", Toast.LENGTH_SHORT).show();
-                            favoriteButton.setEnabled(true);
-                        });
-                    }
-                } else {
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        Toast.makeText(this, "Failed to add favorite", Toast.LENGTH_SHORT).show();
-                        favoriteButton.setEnabled(true);
-                    });
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Error adding favorite", e);
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        com.roominate.services.SupabaseClient.getInstance().addFavorite(boardingHouseId, new com.roominate.services.SupabaseClient.ApiCallback() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                runOnUiThread(() -> {
+                    isFavorite = true;
+                    updateFavoriteButton();
+                    Toast.makeText(BoardingHouseDetailsActivity.this, "Added to favorites", Toast.LENGTH_SHORT).show();
                     favoriteButton.setEnabled(true);
                 });
             }
-        }).start();
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    Toast.makeText(BoardingHouseDetailsActivity.this, "Failed to add favorite: " + error, Toast.LENGTH_SHORT).show();
+                    favoriteButton.setEnabled(true);
+                });
+            }
+        });
     }
     
     private void removeFavorite() {
-        if (favoriteId == null) {
-            return;
-        }
-        
         favoriteButton.setEnabled(false);
         
-        new Thread(() -> {
-            try {
-                String supabaseUrl = com.roominate.BuildConfig.SUPABASE_URL;
-                String supabaseKey = com.roominate.BuildConfig.SUPABASE_ANON_KEY;
-                
-                String url = supabaseUrl + "/rest/v1/favorites?id=eq." + favoriteId;
-                
-                Request request = new Request.Builder()
-                        .url(url)
-                        .delete()
-                        .addHeader("apikey", supabaseKey)
-                        .addHeader("Authorization", "Bearer " + supabaseKey)
-                        .build();
-                
-                Response response = httpClient.newCall(request).execute();
-                
-                if (response.isSuccessful()) {
+        com.roominate.services.SupabaseClient.getInstance().removeFavorite(boardingHouseId, new com.roominate.services.SupabaseClient.ApiCallback() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                runOnUiThread(() -> {
                     isFavorite = false;
                     favoriteId = null;
-                    
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        updateFavoriteButton();
-                        Toast.makeText(this, "Removed from favorites", Toast.LENGTH_SHORT).show();
-                        favoriteButton.setEnabled(true);
-                    });
-                } else {
-                    new Handler(Looper.getMainLooper()).post(() -> {
-                        Toast.makeText(this, "Failed to remove favorite", Toast.LENGTH_SHORT).show();
-                        favoriteButton.setEnabled(true);
-                    });
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Error removing favorite", e);
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    updateFavoriteButton();
+                    Toast.makeText(BoardingHouseDetailsActivity.this, "Removed from favorites", Toast.LENGTH_SHORT).show();
                     favoriteButton.setEnabled(true);
                 });
             }
-        }).start();
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    Toast.makeText(BoardingHouseDetailsActivity.this, "Failed to remove favorite: " + error, Toast.LENGTH_SHORT).show();
+                    favoriteButton.setEnabled(true);
+                });
+            }
+        });
     }
     
     private void updateFavoriteButton() {

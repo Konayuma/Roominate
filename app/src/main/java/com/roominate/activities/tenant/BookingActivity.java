@@ -83,13 +83,51 @@ public class BookingActivity extends AppCompatActivity {
     }
 
     private void loadBoardingHouseInfo() {
-        // TODO: Load boarding house info from Supabase
-        // For now set default values for testing
-        boardingHouseNameTextView.setText("Sample Boarding House");
-        propertyAddressTextView.setText("123 Main St, City");
-        monthlyRate = 1500;
-        monthlyRateTextView.setText(String.format("₱%.2f", monthlyRate));
-        priceTextView.setText(String.format("₱%.2f / month", monthlyRate));
+        if (boardingHouseId == null || boardingHouseId.isEmpty()) {
+            // Fallback to placeholder
+            boardingHouseNameTextView.setText("Sample Boarding House");
+            propertyAddressTextView.setText("123 Main St, City");
+            monthlyRate = 1500;
+            monthlyRateTextView.setText(String.format("K%.2f", monthlyRate));
+            priceTextView.setText(String.format("K%.2f / month", monthlyRate));
+            return;
+        }
+
+        // Load boarding house info from Supabase using the helper
+        SupabaseClient.getInstance().getPropertyById(boardingHouseId, new SupabaseClient.ApiCallback() {
+            @Override
+            public void onSuccess(org.json.JSONObject response) {
+                runOnUiThread(() -> {
+                    try {
+                        org.json.JSONArray data = response.optJSONArray("data");
+                        if (data != null && data.length() > 0) {
+                            org.json.JSONObject prop = data.getJSONObject(0);
+                            String name = prop.optString("name", prop.optString("title", "Boarding House"));
+                            String address = prop.optString("address", "");
+                            double rate = prop.optDouble("monthly_rate", prop.optDouble("price", 0.0));
+
+                            boardingHouseNameTextView.setText(name);
+                            propertyAddressTextView.setText(address);
+                            monthlyRate = rate;
+                            monthlyRateTextView.setText(String.format("K%.2f", monthlyRate));
+                            priceTextView.setText(String.format("K%.2f / month", monthlyRate));
+                        } else {
+                            // No data: keep defaults
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    // Keep defaults and show a brief message
+                    Toast.makeText(BookingActivity.this, "Failed to load property: " + error, Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
     }
 
     private void setupListeners() {
@@ -128,21 +166,23 @@ public class BookingActivity extends AppCompatActivity {
         datePickerDialog.show();
     }
 
-    private void calculateTotal() {
+    private double calculateTotal() {
         String durationStr = durationEditText.getText().toString();
+        double total = 0.0;
         if (!durationStr.isEmpty()) {
             try {
                 int months = Integer.parseInt(durationStr);
                 durationSummaryTextView.setText(months + " months");
-                double total = monthlyRate * months;
-                totalAmountTextView.setText(String.format("₱%.2f", total));
+                total = monthlyRate * months;
+                totalAmountTextView.setText(String.format("K%.2f", total));
             } catch (NumberFormatException e) {
-                totalAmountTextView.setText("₱0.00");
+                totalAmountTextView.setText("K0.00");
             }
         } else {
             durationSummaryTextView.setText("0 months");
-            totalAmountTextView.setText("₱0.00");
+            totalAmountTextView.setText("K0.00");
         }
+        return total;
     }
 
     private void submitBooking() {
@@ -172,7 +212,7 @@ public class BookingActivity extends AppCompatActivity {
         submitBookingButton.setEnabled(false);
         
         // Submit booking to Supabase
-        SupabaseClient.getInstance(this).createBooking(
+        SupabaseClient.getInstance().createBooking(
             boardingHouseId,
             moveInDate,
             endDate,
@@ -208,16 +248,42 @@ public class BookingActivity extends AppCompatActivity {
     }
     
     private String calculateEndDate(String startDate, int months) {
+        // Accept multiple input formats to be robust across locales and copy/paste values
+        String trimmed = startDate != null ? startDate.trim() : "";
+        if (trimmed.isEmpty()) return startDate;
+
+        java.util.Date date = null;
+        // Try ISO first (yyyy-MM-dd)
         try {
-            SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
-            Date date = format.parse(startDate);
-            Calendar calendar = Calendar.getInstance();
-            calendar.setTime(date);
-            calendar.add(Calendar.MONTH, months);
-            return format.format(calendar.getTime());
-        } catch (Exception e) {
-            Log.e("BookingActivity", "Error calculating end date", e);
-            return startDate; // Fallback to start date
+            SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+            date = iso.parse(trimmed);
+        } catch (Exception ignored) {}
+
+        // Try "MMM dd, yyyy" using device locale
+        if (date == null) {
+            try {
+                SimpleDateFormat f1 = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
+                date = f1.parse(trimmed);
+            } catch (Exception ignored) {}
         }
+
+        // Try English month names as a fallback
+        if (date == null) {
+            try {
+                SimpleDateFormat f2 = new SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH);
+                date = f2.parse(trimmed);
+            } catch (Exception ignored) {}
+        }
+
+        if (date == null) {
+            Log.e("BookingActivity", "Unable to parse start date: '" + startDate + "'");
+            return startDate; // Let backend validate if needed
+        }
+
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(date);
+        calendar.add(Calendar.MONTH, months);
+        SimpleDateFormat outputFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+        return outputFormat.format(calendar.getTime());
     }
 }

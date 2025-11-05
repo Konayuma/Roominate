@@ -46,10 +46,32 @@ public class PropertyAdapter extends RecyclerView.Adapter<PropertyAdapter.ViewHo
     // monthly rate may be a floating-point value; use a float-friendly format
     double rate = p.getMonthlyRate();
     String formattedRate = String.format("%,.0f", rate); // no decimal places
-    holder.price.setText("₱" + formattedRate + "/mo");
-        if (p.getThumbnailUrl() != null && !p.getThumbnailUrl().isEmpty()) {
-            Picasso.get().load(p.getThumbnailUrl()).fit().centerCrop().into(holder.thumbnail);
+    holder.price.setText("ZK" + formattedRate + "/mo");
+        
+        String thumbnailUrl = p.getThumbnailUrl();
+        android.util.Log.d("PropertyAdapter", "Property: " + p.getName() + ", Thumbnail URL: " + thumbnailUrl);
+        
+        if (thumbnailUrl != null && !thumbnailUrl.isEmpty()) {
+            android.util.Log.d("PropertyAdapter", "Loading image with Picasso: " + thumbnailUrl);
+            Picasso.get()
+                .load(thumbnailUrl)
+                .placeholder(R.drawable.ic_house_placeholder)
+                .error(R.drawable.ic_house_placeholder)
+                .fit()
+                .centerCrop()
+                .into(holder.thumbnail, new com.squareup.picasso.Callback() {
+                    @Override
+                    public void onSuccess() {
+                        android.util.Log.d("PropertyAdapter", "Image loaded successfully for: " + p.getName());
+                    }
+
+                    @Override
+                    public void onError(Exception e) {
+                        android.util.Log.e("PropertyAdapter", "Failed to load image for: " + p.getName(), e);
+                    }
+                });
         } else {
+            android.util.Log.d("PropertyAdapter", "No thumbnail URL, using placeholder for: " + p.getName());
             holder.thumbnail.setImageResource(R.drawable.ic_house_placeholder);
         }
         holder.itemView.setOnClickListener(v -> listener.onItemClick(p));

@@ -1,10 +1,13 @@
 package com.roominate.activities.owner;
 
+import android.Manifest;
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
@@ -16,7 +19,10 @@ import android.widget.Spinner;
 import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.button.MaterialButton;
@@ -67,6 +73,7 @@ public class AddPropertyActivity extends AppCompatActivity {
     private ChipGroup amenitiesChipGroup;
     private RecyclerView imagesRecyclerView;
     private MaterialButton addImageButton;
+    private MaterialButton takePictureButton;
     private MaterialButton submitButton;
     
     private List<Uri> selectedImageUris = new ArrayList<>();
@@ -74,8 +81,11 @@ public class AddPropertyActivity extends AppCompatActivity {
     private ProgressDialog progressDialog;
     private String currentUserId;
     private String currentUserEmail;
+    private Uri capturedImageUri;
     
     private ActivityResultLauncher<Intent> imagePickerLauncher;
+    private ActivityResultLauncher<Uri> takePictureLauncher;
+    private ActivityResultLauncher<String> cameraPermissionLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -87,6 +97,7 @@ public class AddPropertyActivity extends AppCompatActivity {
         setupSpinners();
         setupAmenities();
         setupImagePicker();
+        setupCamera();
         setupListeners();
     }
 
@@ -133,6 +144,7 @@ public class AddPropertyActivity extends AppCompatActivity {
         amenitiesChipGroup = findViewById(R.id.amenitiesChipGroup);
         imagesRecyclerView = findViewById(R.id.imagesRecyclerView);
         addImageButton = findViewById(R.id.addImageButton);
+        // takePictureButton = findViewById(R.id.takePictureButton);  // TODO: Add to layout if needed
         submitButton = findViewById(R.id.submitButton);
         
         // Setup RecyclerView for image preview
@@ -161,14 +173,9 @@ public class AddPropertyActivity extends AppCompatActivity {
             Chip chip = new Chip(this);
             chip.setText(amenity);
             chip.setCheckable(true);
-            // Use color state lists for background and text
-            chip.setChipBackgroundColor(getResources().getColorStateList(R.color.chip_background_color, getTheme()));
-            chip.setTextColor(getResources().getColorStateList(R.color.chip_text_color, getTheme()));
             chip.setChipStrokeColorResource(R.color.system_blue);
             chip.setChipStrokeWidth(2f);
             chip.setCheckedIconVisible(true);
-            // Provide a ColorStateList to setCheckedIconTint instead of an int color to avoid type mismatch
-            chip.setCheckedIconTint(getResources().getColorStateList(R.color.white, getTheme()));
             amenitiesChipGroup.addView(chip);
         }
     }
@@ -205,6 +212,76 @@ public class AddPropertyActivity extends AppCompatActivity {
             }
         );
     }
+    
+    private void setupCamera() {
+        // Camera permission launcher
+        cameraPermissionLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestPermission(),
+            isGranted -> {
+                if (isGranted) {
+                    Toast.makeText(this, "Camera permission granted", Toast.LENGTH_SHORT).show();
+                    launchCamera();
+                } else {
+                    Toast.makeText(this, "Camera permission denied", Toast.LENGTH_SHORT).show();
+                }
+            }
+        );
+        
+        // Take picture launcher
+        takePictureLauncher = registerForActivityResult(
+            new ActivityResultContracts.TakePicture(),
+            success -> {
+                if (success && capturedImageUri != null) {
+                    // Image captured successfully
+                    if (selectedImageUris.size() < 5) {
+                        selectedImageUris.add(capturedImageUri);
+                        imagePreviewAdapter.notifyDataSetChanged();
+                        imagesRecyclerView.setVisibility(View.VISIBLE);
+                        Toast.makeText(this, "Photo captured", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(this, "Maximum 5 images allowed", Toast.LENGTH_SHORT).show();
+                    }
+                    capturedImageUri = null;
+                } else {
+                    Toast.makeText(this, "Failed to capture photo", Toast.LENGTH_SHORT).show();
+                }
+            }
+        );
+    }
+    
+    private void checkCameraPermissionAndLaunch() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) 
+                == PackageManager.PERMISSION_GRANTED) {
+            launchCamera();
+        } else {
+            // Show rationale dialog
+            new AlertDialog.Builder(this)
+                .setTitle("Camera Permission")
+                .setMessage("This app needs camera access to take photos of your property.")
+                .setPositiveButton("Grant", (dialog, which) -> {
+                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+        }
+    }
+    
+    private void launchCamera() {
+        try {
+            // Create temporary file for captured image
+            File imageFile = new File(getCacheDir(), "property_" + System.currentTimeMillis() + ".jpg");
+            capturedImageUri = FileProvider.getUriForFile(
+                this,
+                getApplicationContext().getPackageName() + ".fileprovider",
+                imageFile
+            );
+            
+            takePictureLauncher.launch(capturedImageUri);
+        } catch (Exception e) {
+            Log.e(TAG, "Error launching camera", e);
+            Toast.makeText(this, "Failed to launch camera: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
 
     private void removeImage(int position) {
         if (position >= 0 && position < selectedImageUris.size()) {
@@ -228,6 +305,19 @@ public class AddPropertyActivity extends AppCompatActivity {
             intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
             imagePickerLauncher.launch(Intent.createChooser(intent, "Select Property Images"));
         });
+        
+        // takePictureButton functionality - add when button exists in layout
+        /*
+        if (takePictureButton != null) {
+            takePictureButton.setOnClickListener(v -> {
+                if (selectedImageUris.size() >= 5) {
+                    Toast.makeText(this, "Maximum 5 images allowed", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                checkCameraPermissionAndLaunch();
+            });
+        }
+        */
         
         submitButton.setOnClickListener(v -> {
             if (validateFields()) {
@@ -424,13 +514,15 @@ public class AddPropertyActivity extends AppCompatActivity {
                     Log.d(TAG, "Uploading image to: " + uploadUrl);
                     Log.d(TAG, "File size: " + fileBytes.length + " bytes");
                     
-                    Request request = new Request.Builder()
+                    Request.Builder reqBuilder = new Request.Builder()
                         .url(uploadUrl)
-                        .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                        .addHeader("Content-Type", "image/jpeg")
                         .put(requestBody)  // Use PUT instead of POST for Supabase Storage
-                        .build();
+                        .addHeader("Content-Type", "image/jpeg");
+
+                    // Centralized header wiring (apikey + Authorization)
+                    reqBuilder = com.roominate.services.SupabaseClient.addAuthHeaders(reqBuilder);
+
+                    Request request = reqBuilder.build();
                     
                     Response response = client.newCall(request).execute();
                     Log.d(TAG, "Upload response code: " + response.code());
@@ -505,14 +597,16 @@ public class AddPropertyActivity extends AppCompatActivity {
                 .writeTimeout(60, TimeUnit.SECONDS)
                 .build();
             
-            Request request = new Request.Builder()
+            Request.Builder reqBuilder = new Request.Builder()
                 .url(BuildConfig.SUPABASE_URL + "/rest/v1/boarding_houses")
-                .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Prefer", "return=representation")
                 .post(requestBody)
-                .build();
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Prefer", "return=representation");
+
+            // Centralized header wiring (apikey + Authorization)
+            reqBuilder = com.roominate.services.SupabaseClient.addAuthHeaders(reqBuilder);
+
+            Request request = reqBuilder.build();
             
             Response response = client.newCall(request).execute();
             boolean success = response.isSuccessful();
