@@ -97,8 +97,11 @@ public class Property {
         property.setLongitude(jsonObject.optDouble("longitude", 0.0));
         property.setAvailableRooms(jsonObject.optInt("available_rooms", 0));
 
-        // Parse image_urls array
-        JSONArray imageUrlsJson = jsonObject.optJSONArray("image_urls");
+        // Parse image_urls or images array (support both column names)
+        JSONArray imageUrlsJson = jsonObject.optJSONArray("images");
+        if (imageUrlsJson == null) {
+            imageUrlsJson = jsonObject.optJSONArray("image_urls");
+        }
         if (imageUrlsJson != null) {
             List<String> urls = new ArrayList<>();
             for (int i = 0; i < imageUrlsJson.length(); i++) {
@@ -136,7 +139,7 @@ public class Property {
         jsonObject.put("latitude", latitude);
         jsonObject.put("longitude", longitude);
         jsonObject.put("available_rooms", availableRooms);
-        jsonObject.put("image_urls", new JSONArray(imageUrls));
+        jsonObject.put("images", new JSONArray(imageUrls)); // Use "images" column name
         jsonObject.put("amenities", new JSONArray(amenities));
         return jsonObject;
     }

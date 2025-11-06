@@ -261,11 +261,18 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
 
     private void setupImageSlider() {
         if (boardingHouse == null || boardingHouse.getImageUrls() == null || boardingHouse.getImageUrls().isEmpty()) {
-            // If no images, just set a placeholder
-            imagesViewPager.setAdapter(new ImageSliderAdapter(new java.util.ArrayList<>()));
+            // If no images, show placeholder in ViewPager
+            Log.d(TAG, "No images available, showing placeholder");
+            java.util.List<String> placeholderList = new java.util.ArrayList<>();
+            placeholderList.add("placeholder"); // Will trigger placeholder loading
+            imagesViewPager.setAdapter(new ImageSliderAdapter(placeholderList));
             return;
         }
         
+        Log.d(TAG, "Setting up image slider with " + boardingHouse.getImageUrls().size() + " images");
+        for (String url : boardingHouse.getImageUrls()) {
+            Log.d(TAG, "Image URL: " + url);
+        }
         imagesViewPager.setAdapter(new ImageSliderAdapter(boardingHouse.getImageUrls()));
     }
 
@@ -307,13 +314,31 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
         @Override
         public void onBindViewHolder(ImageViewHolder holder, int position) {
             String imageUrl = imageUrls.get(position);
-            Picasso.get()
-                .load(imageUrl)
-                .fit()
-                .centerCrop()
-                .placeholder(android.R.drawable.ic_menu_gallery)
-                .error(android.R.drawable.ic_menu_gallery)
-                .into(holder.imageView);
+            Log.d(TAG, "Loading image at position " + position + ": " + imageUrl);
+            
+            if (imageUrl == null || imageUrl.isEmpty() || imageUrl.equals("placeholder")) {
+                // Show placeholder
+                holder.imageView.setImageResource(R.drawable.ic_house_placeholder);
+                holder.imageView.setScaleType(ImageView.ScaleType.CENTER);
+            } else {
+                Picasso.get()
+                    .load(imageUrl)
+                    .fit()
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_house_placeholder)
+                    .error(R.drawable.ic_house_placeholder)
+                    .into(holder.imageView, new com.squareup.picasso.Callback() {
+                        @Override
+                        public void onSuccess() {
+                            Log.d(TAG, "Image loaded successfully at position " + position);
+                        }
+
+                        @Override
+                        public void onError(Exception e) {
+                            Log.e(TAG, "Failed to load image at position " + position, e);
+                        }
+                    });
+            }
         }
 
         @Override
