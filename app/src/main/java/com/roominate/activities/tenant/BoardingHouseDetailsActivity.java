@@ -12,6 +12,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.RatingBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -25,6 +26,7 @@ import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.roominate.BuildConfig;
 import com.roominate.R;
 import com.roominate.adapters.ReviewsAdapter;
 import com.roominate.models.BoardingHouse;
@@ -34,6 +36,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import okhttp3.*;
 import java.io.IOException;
@@ -42,6 +46,8 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
     private static final String TAG = "BoardingHouseDetails";
 
     private ViewPager2 imagesViewPager;
+    private LinearLayout dotsIndicator;
+    private TextView imageCounter;
     private MaterialToolbar toolbar;
     private TextView nameTextView;
     private TextView addressTextView;
@@ -103,6 +109,8 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
 
     private void initializeViews() {
         imagesViewPager = findViewById(R.id.imagesViewPager);
+        dotsIndicator = findViewById(R.id.dotsIndicator);
+        imageCounter = findViewById(R.id.imageCounter);
         toolbar = findViewById(R.id.toolbar);
         nameTextView = findViewById(R.id.nameTextView);
         addressTextView = findViewById(R.id.addressTextView);
@@ -266,6 +274,8 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
             java.util.List<String> placeholderList = new java.util.ArrayList<>();
             placeholderList.add("placeholder"); // Will trigger placeholder loading
             imagesViewPager.setAdapter(new ImageSliderAdapter(placeholderList));
+            imageCounter.setText("1/1");
+            setupDotIndicators(1);
             return;
         }
         
@@ -273,7 +283,107 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
         for (String url : boardingHouse.getImageUrls()) {
             Log.d(TAG, "Image URL: " + url);
         }
+        
+        final int imageCount = boardingHouse.getImageUrls().size();
         imagesViewPager.setAdapter(new ImageSliderAdapter(boardingHouse.getImageUrls()));
+        
+        // Setup dot indicators
+        setupDotIndicators(imageCount);
+        
+        // Update counter
+        imageCounter.setText("1/" + imageCount);
+        
+        // Listen for page changes
+        imagesViewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
+            @Override
+            public void onPageSelected(int position) {
+                super.onPageSelected(position);
+                imageCounter.setText((position + 1) + "/" + imageCount);
+                updateDotIndicators(position);
+            }
+        });
+    }
+    
+    private void setupDotIndicators(int count) {
+        dotsIndicator.removeAllViews();
+        
+        if (count <= 1) {
+            dotsIndicator.setVisibility(View.GONE);
+            return;
+        }
+        
+        dotsIndicator.setVisibility(View.VISIBLE);
+        
+        for (int i = 0; i < count; i++) {
+            View dot = new View(this);
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                (int) (8 * getResources().getDisplayMetrics().density),
+                (int) (8 * getResources().getDisplayMetrics().density)
+            );
+            params.setMargins(
+                (int) (4 * getResources().getDisplayMetrics().density),
+                0,
+                (int) (4 * getResources().getDisplayMetrics().density),
+                0
+            );
+            dot.setLayoutParams(params);
+            dot.setBackgroundResource(i == 0 ? R.drawable.dot_active : R.drawable.dot_inactive);
+            dotsIndicator.addView(dot);
+        }
+    }
+    
+    private void updateDotIndicators(int position) {
+        for (int i = 0; i < dotsIndicator.getChildCount(); i++) {
+            View dot = dotsIndicator.getChildAt(i);
+            dot.setBackgroundResource(i == position ? R.drawable.dot_active : R.drawable.dot_inactive);
+            
+            // Animate the active dot
+            if (i == position) {
+                dot.animate().scaleX(1.2f).scaleY(1.2f).setDuration(200).start();
+            } else {
+                dot.animate().scaleX(1f).scaleY(1f).setDuration(200).start();
+            }
+        }
+    }
+    
+    /**
+     * Fix malformed image URLs by properly encoding the storage path.
+     * Extracts the path from a full URL and re-encodes it correctly.
+     */
+    private String fixImageUrl(String url) {
+        if (url == null || url.isEmpty() || url.equals("placeholder")) {
+            return url;
+        }
+        
+        try {
+            // Check if this is a full Supabase Storage URL
+            if (url.contains("/storage/v1/object/public/property-images/")) {
+                // Extract the storage path after "property-images/"
+                int pathStartIndex = url.indexOf("/storage/v1/object/public/property-images/") + 
+                                   "/storage/v1/object/public/property-images/".length();
+                String storagePath = url.substring(pathStartIndex);
+                
+                // Re-encode the path properly
+                String[] segments = storagePath.split("/");
+                StringBuilder encodedPath = new StringBuilder();
+                for (int i = 0; i < segments.length; i++) {
+                    if (i > 0) encodedPath.append("/");
+                    encodedPath.append(URLEncoder.encode(segments[i], StandardCharsets.UTF_8.toString())
+                        .replace("+", "%20"));
+                }
+                
+                // Reconstruct the full URL with properly encoded path
+                String fixedUrl = BuildConfig.SUPABASE_URL + "/storage/v1/object/public/property-images/" + encodedPath.toString();
+                Log.d(TAG, "Fixed image URL: " + fixedUrl);
+                return fixedUrl;
+            }
+            
+            // If not a recognized format, return as-is
+            return url;
+        } catch (Exception e) {
+            Log.e(TAG, "Error fixing image URL: " + url, e);
+            return url;
+        }
     }
 
     private void setupAmenitiesChips() {
@@ -321,8 +431,12 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
                 holder.imageView.setImageResource(R.drawable.ic_house_placeholder);
                 holder.imageView.setScaleType(ImageView.ScaleType.CENTER);
             } else {
+                // Fix the image URL by properly encoding the storage path
+                String fixedUrl = fixImageUrl(imageUrl);
+                Log.d(TAG, "Using fixed URL: " + fixedUrl);
+                
                 Picasso.get()
-                    .load(imageUrl)
+                    .load(fixedUrl)
                     .fit()
                     .centerCrop()
                     .placeholder(R.drawable.ic_house_placeholder)

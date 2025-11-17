@@ -4,21 +4,22 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/white">
+    android:background="@color/background_light_gray">
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        app:elevation="0dp">
+        app:elevation="4dp"
+        android:background="@color/white">
 
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            android:background="@android:color/white"
+            android:background="@color/white"
             app:navigationIcon="@drawable/ic_arrow_back"
             app:title="My Bookings"
-            app:titleTextColor="#000000" />
+            app:titleTextColor="@color/text_primary" />
 
         <!-- Filter Buttons -->
         <LinearLayout
@@ -26,7 +27,7 @@
             android:layout_height="56dp"
             android:orientation="horizontal"
             android:padding="8dp"
-            android:background="@android:color/white"
+            android:background="@color/white"
             android:gravity="center_vertical">
 
             <com.google.android.material.button.MaterialButton
@@ -37,7 +38,9 @@
                 android:layout_weight="1"
                 android:layout_marginHorizontal="4dp"
                 android:text="All"
-                android:textSize="12sp" />
+                android:textSize="12sp"
+                app:strokeColor="@color/primary_blue"
+                app:rippleColor="@color/primary_blue_light" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/confirmedButton"
@@ -47,7 +50,9 @@
                 android:layout_weight="1"
                 android:layout_marginHorizontal="4dp"
                 android:text="Confirmed"
-                android:textSize="12sp" />
+                android:textSize="12sp"
+                app:strokeColor="@color/success_green"
+                app:rippleColor="@color/success_green" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/pendingButton"
@@ -57,7 +62,9 @@
                 android:layout_weight="1"
                 android:layout_marginHorizontal="4dp"
                 android:text="Pending"
-                android:textSize="12sp" />
+                android:textSize="12sp"
+                app:strokeColor="@color/pending_orange"
+                app:rippleColor="@color/pending_orange" />
 
         </LinearLayout>
 
@@ -88,6 +95,7 @@
                 android:orientation="vertical"
                 android:gravity="center"
                 android:padding="32dp"
+                android:background="@color/background_very_light"
                 android:visibility="gone">
 
                 <TextView
@@ -95,9 +103,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="No bookings yet"
-                    android:textSize="18sp"
+                    android:textSize="20sp"
                     android:textStyle="bold"
-                    android:textColor="#666666"
+                    android:textColor="@color/text_primary"
                     android:textAlignment="center" />
 
                 <TextView
@@ -105,7 +113,7 @@
                     android:layout_height="wrap_content"
                     android:text="Your confirmed bookings will appear here as receipts"
                     android:textSize="14sp"
-                    android:textColor="#999999"
+                    android:textColor="@color/text_secondary"
                     android:textAlignment="center"
                     android:layout_marginTop="8dp" />
 

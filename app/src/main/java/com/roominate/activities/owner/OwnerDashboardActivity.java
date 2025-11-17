@@ -210,9 +210,8 @@ public class OwnerDashboardActivity extends AppCompatActivity implements Navigat
             loadFragment(new ProfileFragment());
             bottomNavigationView.setSelectedItemId(id);
         } else if (id == R.id.nav_settings) {
-            // TODO: Create and navigate to SettingsActivity
-            // Intent intent = new Intent(this, SettingsActivity.class);
-            // startActivity(intent);
+            Intent intent = new Intent(this, com.roominate.activities.tenant.SettingsActivity.class);
+            startActivity(intent);
         } else if (id == R.id.nav_switch_to_tenant) {
             switchToTenantView();
         } else if (id == R.id.nav_sign_out) {

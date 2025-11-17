@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@android:color/white">
+    android:background="@color/background_light_gray">
 
     <!-- Top bar with hamburger menu -->
     <LinearLayout
@@ -100,7 +100,8 @@
             android:layout_height="match_parent"
             android:clipToPadding="false"
             android:paddingTop="8dp"
-            android:paddingBottom="88dp" />
+            android:paddingBottom="88dp"
+            android:scrollbarStyle="outsideOverlay" />
 
     </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 

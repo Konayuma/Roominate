@@ -286,8 +286,9 @@
                             android:id="@+id/notificationSwitch"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            app:thumbTint="@color/white"
-                            app:trackTint="@color/primary_blue" />
+                            android:checked="false"
+                            app:thumbTint="@color/switch_thumb_color"
+                            app:trackTint="@color/switch_track_color" />
 
                     </LinearLayout>
 
@@ -324,8 +325,9 @@
                             android:id="@+id/bookingAlertsSwitch"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            app:thumbTint="@color/white"
-                            app:trackTint="@color/primary_blue" />
+                            android:checked="false"
+                            app:thumbTint="@color/switch_thumb_color"
+                            app:trackTint="@color/switch_track_color" />
 
                     </LinearLayout>
 
@@ -362,8 +364,9 @@
                             android:id="@+id/messagesSwitch"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            app:thumbTint="@color/white"
-                            app:trackTint="@color/primary_blue" />
+                            android:checked="false"
+                            app:thumbTint="@color/switch_thumb_color"
+                            app:trackTint="@color/switch_track_color" />
 
                     </LinearLayout>
 
@@ -421,8 +424,9 @@
                         android:id="@+id/darkModeSwitch"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        app:thumbTint="@color/white"
-                        app:trackTint="@color/primary_blue" />
+                        android:checked="false"
+                        app:thumbTint="@color/switch_thumb_color"
+                        app:trackTint="@color/switch_track_color" />
 
                 </LinearLayout>
 

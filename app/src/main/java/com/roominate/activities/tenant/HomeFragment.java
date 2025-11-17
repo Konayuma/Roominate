@@ -106,7 +106,8 @@ public class HomeFragment extends Fragment {
                 Log.d(TAG, "Loading available properties for tenant...");
                 
                 // Query boarding_houses where available=true (public listings)
-                String url = BuildConfig.SUPABASE_URL + "/rest/v1/boarding_houses?available=eq.true&status=eq.active&select=*";
+                // Exclude 'images' column since we fetch images separately from properties_media
+                String url = BuildConfig.SUPABASE_URL + "/rest/v1/boarding_houses?available=eq.true&status=eq.active&select=id,owner_id,name,description,address,city,province,monthly_rate,security_deposit,total_rooms,available_rooms,room_type,furnished,private_bathroom,electricity_included,water_included,internet_included,contact_person,contact_phone,amenities,status,latitude,longitude,created_at,updated_at";
                 Log.d(TAG, "Query URL: " + url);
                 
                 Request.Builder requestBuilder = new Request.Builder()
@@ -134,76 +135,110 @@ public class HomeFragment extends Fragment {
                     JSONArray jsonArray = new JSONArray(responseBody);
                     Log.d(TAG, "Found " + jsonArray.length() + " available properties");
                     
-                    properties.clear();
-                    
-                    for (int i = 0; i < jsonArray.length(); i++) {
-                        JSONObject jsonObject = jsonArray.getJSONObject(i);
-                        
-                        // Map boarding_houses fields to Property model
-                        Property property = new Property();
-                        property.setId(jsonObject.optString("id"));
-                        property.setOwnerId(jsonObject.optString("owner_id"));
-                        property.setName(jsonObject.optString("name"));
-                        property.setDescription(jsonObject.optString("description"));
-                        property.setAddress(jsonObject.optString("address"));
-                        property.setMonthlyRate(jsonObject.optDouble("monthly_rate", 0.0));
-                        property.setSecurityDeposit(jsonObject.optDouble("security_deposit", 0.0));
-                        property.setStatus(jsonObject.optString("status", "draft"));
-                        
-                        // Parse images JSONB array
-                        if (jsonObject.has("images") && !jsonObject.isNull("images")) {
-                            JSONArray imagesArray = jsonObject.optJSONArray("images");
-                            if (imagesArray != null && imagesArray.length() > 0) {
-                                List<String> imageUrls = new ArrayList<>();
-                                for (int j = 0; j < imagesArray.length(); j++) {
-                                    imageUrls.add(imagesArray.getString(j));
+                    // Fetch images for these properties from properties_media table
+                    SupabaseClient.getInstance().fetchImagesForPropertiesStatic(jsonArray, new SupabaseClient.ApiCallback() {
+                        @Override
+                        public void onSuccess(JSONObject result) {
+                            try {
+                                JSONArray propertiesWithImages = result.optJSONArray("properties_with_images");
+                                
+                                properties.clear();
+                                
+                                for (int i = 0; i < propertiesWithImages.length(); i++) {
+                                    JSONObject jsonObject = propertiesWithImages.getJSONObject(i);
+                                    
+                                    // Map boarding_houses fields to Property model
+                                    Property property = new Property();
+                                    property.setId(jsonObject.optString("id"));
+                                    property.setOwnerId(jsonObject.optString("owner_id"));
+                                    property.setName(jsonObject.optString("name"));
+                                    property.setDescription(jsonObject.optString("description"));
+                                    property.setAddress(jsonObject.optString("address"));
+                                    property.setMonthlyRate(jsonObject.optDouble("monthly_rate", 0.0));
+                                    property.setSecurityDeposit(jsonObject.optDouble("security_deposit", 0.0));
+                                    property.setStatus(jsonObject.optString("status", "draft"));
+                                    
+                                    // Get images from properties_media (now included via fetchImagesForProperties)
+                                    if (jsonObject.has("images") && !jsonObject.isNull("images")) {
+                                        JSONArray imagesArray = jsonObject.optJSONArray("images");
+                                        if (imagesArray != null && imagesArray.length() > 0) {
+                                            List<String> imageUrls = new ArrayList<>();
+                                            for (int j = 0; j < imagesArray.length(); j++) {
+                                                imageUrls.add(imagesArray.getString(j));
+                                            }
+                                            property.setImageUrls(imageUrls);
+                                            // Set first image as thumbnail
+                                            property.setThumbnailUrl(imageUrls.get(0));
+                                            Log.d(TAG, "Property " + property.getName() + " has " + imageUrls.size() + " images");
+                                        }
+                                    }
+                                    
+                                    // Parse amenities JSONB array
+                                    if (jsonObject.has("amenities") && !jsonObject.isNull("amenities")) {
+                                        JSONArray amenitiesArray = jsonObject.optJSONArray("amenities");
+                                        if (amenitiesArray != null) {
+                                            List<String> amenities = new ArrayList<>();
+                                            for (int j = 0; j < amenitiesArray.length(); j++) {
+                                                amenities.add(amenitiesArray.getString(j));
+                                            }
+                                            property.setAmenities(amenities);
+                                        }
+                                    }
+                                    
+                                    properties.add(property);
                                 }
-                                property.setImageUrls(imageUrls);
-                                // Set first image as thumbnail
-                                property.setThumbnailUrl(imageUrls.get(0));
+                                
+                                // Update UI on main thread
+                                if (isAdded() && getActivity() != null) {
+                                    getActivity().runOnUiThread(() -> {
+                                        Log.d(TAG, "Updating adapter with " + properties.size() + " properties");
+                                        
+                                        // Hide shimmer skeleton
+                                        if (shimmerLayout != null) {
+                                            shimmerLayout.setVisibility(View.GONE);
+                                        }
+                                        
+                                        if (adapter != null) {
+                                            adapter.notifyDataSetChanged();
+                                            Log.d(TAG, "Called notifyDataSetChanged()");
+                                        }
+                                        
+                                        if (properties.isEmpty()) {
+                                            Toast.makeText(getContext(), "No properties available at the moment", Toast.LENGTH_LONG).show();
+                                        } else {
+                                            Toast.makeText(getContext(), "Found " + properties.size() + " property(s)", Toast.LENGTH_SHORT).show();
+                                        }
+                                    });
+                                }
+                            } catch (Exception e) {
+                                Log.e(TAG, "Error processing properties with images", e);
+                                if (isAdded() && getActivity() != null) {
+                                    getActivity().runOnUiThread(() -> {
+                                        if (shimmerLayout != null) {
+                                            shimmerLayout.setVisibility(View.GONE);
+                                        }
+                                        Toast.makeText(getContext(), "Error processing properties: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                    });
+                                }
                             }
                         }
-                        
-                        // Parse amenities JSONB array
-                        if (jsonObject.has("amenities") && !jsonObject.isNull("amenities")) {
-                            JSONArray amenitiesArray = jsonObject.optJSONArray("amenities");
-                            if (amenitiesArray != null) {
-                                List<String> amenities = new ArrayList<>();
-                                for (int j = 0; j < amenitiesArray.length(); j++) {
-                                    amenities.add(amenitiesArray.getString(j));
-                                }
-                                property.setAmenities(amenities);
+
+                        @Override
+                        public void onError(String error) {
+                            Log.e(TAG, "Error fetching images: " + error);
+                            // Still show properties even if images fail
+                            if (isAdded() && getActivity() != null) {
+                                getActivity().runOnUiThread(() -> {
+                                    if (shimmerLayout != null) {
+                                        shimmerLayout.setVisibility(View.GONE);
+                                    }
+                                    if (adapter != null) {
+                                        adapter.notifyDataSetChanged();
+                                    }
+                                });
                             }
                         }
-                        
-                        properties.add(property);
-                    }
-                    
-                    // Update UI on main thread - use isAdded() to check fragment is attached
-                    if (isAdded() && getActivity() != null) {
-                        getActivity().runOnUiThread(() -> {
-                            Log.d(TAG, "Updating adapter with " + properties.size() + " properties");
-                            
-                            // Hide shimmer skeleton
-                            if (shimmerLayout != null) {
-                                shimmerLayout.setVisibility(View.GONE);
-                            }
-                            
-                            if (adapter != null) {
-                                adapter.notifyDataSetChanged();
-                                Log.d(TAG, "Called notifyDataSetChanged()");
-                            }
-                            
-                            // Load thumbnails from properties_media table
-                            loadPropertyThumbnails();
-                            
-                            if (properties.isEmpty()) {
-                                Toast.makeText(getContext(), "No properties available at the moment", Toast.LENGTH_LONG).show();
-                            } else {
-                                Toast.makeText(getContext(), "Found " + properties.size() + " property(s)", Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                    }
+                    });
                 } else {
                     String errorBody = response.body() != null ? response.body().string() : "Unknown error";
                     Log.e(TAG, "Failed to load properties: " + response.code() + " - " + errorBody);

@@ -53,6 +53,46 @@ public class SupabaseClient {
     }
 
     /**
+     * Encode each segment of a storage path (slash-separated) for safe URL construction
+     */
+    private String encodeStoragePath(String path) {
+        if (path == null) return null;
+        try {
+            String[] parts = path.split("/");
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < parts.length; i++) {
+                if (i > 0) sb.append("/");
+                String encoded = java.net.URLEncoder.encode(parts[i], "UTF-8");
+                // URLEncoder uses + for spaces; convert to %20 for path segments
+                encoded = encoded.replace("+", "%20");
+                sb.append(encoded);
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to encode storage path: " + path, e);
+            return path;
+        }
+    }
+
+    /**
+     * Generate a signed URL for a storage path (works with private buckets)
+     * @param storagePath The path in storage (e.g., "properties/user123/image.jpg")
+     * @param expiresIn Expiration time in seconds (default: 3600 = 1 hour)
+     */
+    public String getSignedUrl(String storagePath, int expiresIn) {
+        try {
+            // Use Supabase Storage API to create signed URL
+            String signedUrl = BuildConfig.SUPABASE_URL + "/storage/v1/object/sign/property-images/" + encodeStoragePath(storagePath) + "?expiresIn=" + expiresIn;
+            Log.d(TAG, "Generated signed URL request: " + signedUrl);
+            return signedUrl;
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to generate signed URL for: " + storagePath, e);
+            // Fallback to public URL
+            return BuildConfig.SUPABASE_URL + "/storage/v1/object/public/property-images/" + encodeStoragePath(storagePath);
+        }
+    }
+
+    /**
      * Attach Supabase authentication headers to a Request.Builder.
      * Adds the public anon API key as `apikey` and prefers the user's access_token
      * (from SharedPreferences `roominate_prefs.access_token`) for the Authorization header.
@@ -811,13 +851,32 @@ public class SupabaseClient {
                 public void onResponse(Call call, Response response) throws IOException {
                     String body = response.body() != null ? response.body().string() : "";
                     try {
-                        org.json.JSONObject wrapper = new org.json.JSONObject();
-                        wrapper.put("data", new org.json.JSONArray(body));
-                        if (response.isSuccessful()) {
-                            callback.onSuccess(wrapper);
-                        } else {
-                            callback.onError("Status=" + response.code() + " body=" + body);
-                        }
+                        org.json.JSONArray propertiesArray = new org.json.JSONArray(body);
+                        // Fetch images for each property and attach them
+                        fetchImagesForProperties(propertiesArray, new ApiCallback() {
+                            @Override
+                            public void onSuccess(org.json.JSONObject result) {
+                                org.json.JSONObject wrapper = new org.json.JSONObject();
+                                try {
+                                    wrapper.put("data", result.optJSONArray("properties_with_images"));
+                                    callback.onSuccess(wrapper);
+                                } catch (org.json.JSONException e) {
+                                    callback.onError("Error processing images: " + e.getMessage());
+                                }
+                            }
+
+                            @Override
+                            public void onError(String error) {
+                                // Still return properties even if image fetching fails
+                                org.json.JSONObject wrapper = new org.json.JSONObject();
+                                try {
+                                    wrapper.put("data", propertiesArray);
+                                    callback.onSuccess(wrapper);
+                                } catch (org.json.JSONException e) {
+                                    callback.onError("Error: " + e.getMessage());
+                                }
+                            }
+                        });
                     } catch (Exception e) {
                         Log.e(TAG, "getPropertiesByOwner parse error", e);
                         callback.onError("Failed to parse response");
@@ -828,6 +887,108 @@ public class SupabaseClient {
             Log.e(TAG, "getPropertiesByOwner exception", e);
             callback.onError("Failed to fetch properties: " + e.getMessage());
         }
+    }
+    
+    /**
+     * Fetch images from properties_media table and attach them to properties
+     */
+    private void fetchImagesForProperties(org.json.JSONArray properties, ApiCallback callback) {
+        try {
+            org.json.JSONArray propertyIds = new org.json.JSONArray();
+            for (int i = 0; i < properties.length(); i++) {
+                propertyIds.put(properties.getJSONObject(i).optString("id"));
+            }
+            
+            if (propertyIds.length() == 0) {
+                org.json.JSONObject result = new org.json.JSONObject();
+                result.put("properties_with_images", properties);
+                callback.onSuccess(result);
+                return;
+            }
+            
+            // Fetch all images for these properties
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/properties_media?listing_id=in.(" 
+                + propertyIds.join(",") + ")&select=listing_id,url&order=ordering";
+            Log.d(TAG, "Fetching images from: " + url);
+            
+            Request.Builder rb = new Request.Builder().url(url).get().addHeader("Accept", "application/json");
+            addAuthHeaders(rb);
+            Request request = rb.build();
+            
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "fetchImagesForProperties network failure", e);
+                    callback.onError("Network error: " + e.getMessage());
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    String body = response.body() != null ? response.body().string() : "[]";
+                    try {
+                        org.json.JSONArray mediaArray = new org.json.JSONArray(body);
+                        
+                        // Group images by listing_id
+                        java.util.Map<String, org.json.JSONArray> imagesByListing = new java.util.HashMap<>();
+                        for (int i = 0; i < mediaArray.length(); i++) {
+                            org.json.JSONObject media = mediaArray.getJSONObject(i);
+                            String listingId = media.optString("listing_id");
+                            String imageUrl = media.optString("url");
+                            
+                            // Convert storage path to full URL if needed
+                            if (imageUrl != null && !imageUrl.isEmpty()) {
+                                if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+                                    // Already a full URL - extract the storage path and re-encode it
+                                    String bucketPrefix = "/storage/v1/object/public/property-images/";
+                                    int pathStart = imageUrl.indexOf(bucketPrefix);
+                                    if (pathStart != -1) {
+                                        String storagePath = imageUrl.substring(pathStart + bucketPrefix.length());
+                                        imageUrl = BuildConfig.SUPABASE_URL + bucketPrefix + encodeStoragePath(storagePath);
+                                        Log.d(TAG, "Re-encoded full URL: " + imageUrl);
+                                    }
+                                } else {
+                                    // It's a storage path, convert to public URL and ensure safe encoding
+                                    imageUrl = BuildConfig.SUPABASE_URL + "/storage/v1/object/public/property-images/" + encodeStoragePath(imageUrl);
+                                    Log.d(TAG, "Converted storage path to URL: " + imageUrl);
+                                }
+                            }
+                            
+                            if (!imagesByListing.containsKey(listingId)) {
+                                imagesByListing.put(listingId, new org.json.JSONArray());
+                            }
+                            imagesByListing.get(listingId).put(imageUrl);
+                        }
+                        
+                        // Attach images to properties
+                        for (int i = 0; i < properties.length(); i++) {
+                            org.json.JSONObject prop = properties.getJSONObject(i);
+                            String propId = prop.optString("id");
+                            org.json.JSONArray images = imagesByListing.getOrDefault(propId, new org.json.JSONArray());
+                            prop.put("images", images);
+                            Log.d(TAG, "Property " + propId + " has " + images.length() + " images");
+                        }
+                        
+                        org.json.JSONObject result = new org.json.JSONObject();
+                        result.put("properties_with_images", properties);
+                        callback.onSuccess(result);
+                    } catch (Exception e) {
+                        Log.e(TAG, "fetchImagesForProperties parse error", e);
+                        callback.onError("Failed to parse images: " + e.getMessage());
+                    }
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "fetchImagesForProperties exception", e);
+            callback.onError("Error fetching images: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Public method to fetch images for properties
+     * Used by HomeFragment and other views to attach images from properties_media table
+     */
+    public void fetchImagesForPropertiesStatic(JSONArray properties, ApiCallback callback) {
+        fetchImagesForProperties(properties, callback);
     }
 
     /**
@@ -851,12 +1012,38 @@ public class SupabaseClient {
                 public void onResponse(Call call, Response response) throws IOException {
                     String body = response.body() != null ? response.body().string() : "";
                     try {
-                        org.json.JSONObject wrapper = new org.json.JSONObject();
-                        wrapper.put("data", new org.json.JSONArray(body));
-                        if (response.isSuccessful()) {
-                            callback.onSuccess(wrapper);
+                        org.json.JSONArray propertiesArray = new org.json.JSONArray(body);
+                        
+                        // Fetch images for this property
+                        if (propertiesArray.length() > 0) {
+                            fetchImagesForProperties(propertiesArray, new ApiCallback() {
+                                @Override
+                                public void onSuccess(org.json.JSONObject result) {
+                                    org.json.JSONObject wrapper = new org.json.JSONObject();
+                                    try {
+                                        wrapper.put("data", result.optJSONArray("properties_with_images"));
+                                        callback.onSuccess(wrapper);
+                                    } catch (org.json.JSONException e) {
+                                        callback.onError("Error processing images: " + e.getMessage());
+                                    }
+                                }
+
+                                @Override
+                                public void onError(String error) {
+                                    // Still return property even if image fetching fails
+                                    org.json.JSONObject wrapper = new org.json.JSONObject();
+                                    try {
+                                        wrapper.put("data", propertiesArray);
+                                        callback.onSuccess(wrapper);
+                                    } catch (org.json.JSONException e) {
+                                        callback.onError("Error: " + e.getMessage());
+                                    }
+                                }
+                            });
                         } else {
-                            callback.onError("Status=" + response.code() + " body=" + body);
+                            org.json.JSONObject wrapper = new org.json.JSONObject();
+                            wrapper.put("data", propertiesArray);
+                            callback.onSuccess(wrapper);
                         }
                     } catch (Exception e) {
                         Log.e(TAG, "getPropertyById parse error", e);
@@ -932,16 +1119,34 @@ public class SupabaseClient {
                     org.json.JSONArray arr = new org.json.JSONArray(body);
                     if (arr.length() > 0) {
                         String imageUrl = arr.getJSONObject(0).optString("url", null);
-                        Log.d(TAG, "getPropertyThumbnailSync found raw URL: " + imageUrl);
+                        Log.d(TAG, "getPropertyThumbnailSync found raw URL/path: " + imageUrl);
                         
                         if (imageUrl != null && !imageUrl.isEmpty()) {
-                            // Convert to full public URL if it's just a storage path
-                            if (!imageUrl.startsWith("http://") && !imageUrl.startsWith("https://")) {
+                            // Check if it's already a full URL
+                            if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+                                // Extract the storage path from the full URL and re-encode it
+                                try {
+                                    String storagePrefix = "/storage/v1/object/public/property-images/";
+                                    int pathStartIndex = imageUrl.indexOf(storagePrefix);
+                                    if (pathStartIndex != -1) {
+                                        String storagePath = imageUrl.substring(pathStartIndex + storagePrefix.length());
+                                        String publicUrl = BuildConfig.SUPABASE_URL + storagePrefix + encodeStoragePath(storagePath);
+                                        Log.d(TAG, "Re-encoded existing URL. Original: " + imageUrl + ", New: " + publicUrl);
+                                        return publicUrl;
+                                    } else {
+                                        Log.w(TAG, "Unexpected URL format, returning as-is: " + imageUrl);
+                                        return imageUrl;
+                                    }
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Error re-encoding URL: " + imageUrl, e);
+                                    return imageUrl;
+                                }
+                            } else {
                                 // It's a storage path, convert to public URL
-                                imageUrl = BuildConfig.SUPABASE_URL + "/storage/v1/object/public/property-images/" + imageUrl;
-                                Log.d(TAG, "Converted to public URL: " + imageUrl);
+                                String publicUrl = BuildConfig.SUPABASE_URL + "/storage/v1/object/public/property-images/" + encodeStoragePath(imageUrl);
+                                Log.d(TAG, "Converted to public URL: " + publicUrl);
+                                return publicUrl;
                             }
-                            return imageUrl;
                         }
                     }
                 } catch (Exception e) {
@@ -1036,14 +1241,15 @@ public class SupabaseClient {
                 
                 uploadResponse.close();
                 
-                // Generate public URL
-                String publicUrl = BuildConfig.SUPABASE_URL + "/storage/v1/object/public/property-images/" + storagePath;
-                Log.d(TAG, "Image uploaded successfully: " + publicUrl);
+                // Store just the storage path in the database, not the full URL
+                // We'll construct the public URL at read time
+                String storagePath_only = storagePath;
+                Log.d(TAG, "Image uploaded successfully to storage path: " + storagePath_only);
                 
                 // Insert into properties_media table
                 org.json.JSONObject mediaRecord = new org.json.JSONObject();
                 mediaRecord.put("listing_id", propertyId);  // Changed from property_id
-                mediaRecord.put("url", publicUrl);          // Changed from image_url
+                mediaRecord.put("url", storagePath_only);   // Store just the path, not the full URL
                 mediaRecord.put("filename", fileName);
                 mediaRecord.put("mime_type", "image/jpeg");
                 mediaRecord.put("ordering", isPrimary ? 0 : 1);  // Primary images get ordering 0
@@ -1066,6 +1272,8 @@ public class SupabaseClient {
                     org.json.JSONArray arr = new org.json.JSONArray(body);
                     org.json.JSONObject wrapper = new org.json.JSONObject();
                     wrapper.put("data", arr);
+                    // Construct full public URL for return (ensure encoded path)
+                    String publicUrl = BuildConfig.SUPABASE_URL + "/storage/v1/object/public/property-images/" + encodeStoragePath(storagePath_only);
                     wrapper.put("image_url", publicUrl);
                     callback.onSuccess(wrapper);
                 } else {
@@ -2708,7 +2916,29 @@ public class SupabaseClient {
                         if (response.isSuccessful()) {
                             org.json.JSONArray properties = new org.json.JSONArray(body);
                             Log.d(TAG, "Fetched " + properties.length() + " properties with coordinates");
-                            callback.onSuccess(new org.json.JSONObject().put("properties", properties));
+                            
+                            // Fetch images for these properties
+                            fetchImagesForProperties(properties, new ApiCallback() {
+                                @Override
+                                public void onSuccess(org.json.JSONObject result) {
+                                    try {
+                                        callback.onSuccess(new org.json.JSONObject()
+                                            .put("properties", result.optJSONArray("properties_with_images")));
+                                    } catch (org.json.JSONException e) {
+                                        callback.onError("Error processing images: " + e.getMessage());
+                                    }
+                                }
+
+                                @Override
+                                public void onError(String error) {
+                                    // Still return properties even if image fetching fails
+                                    try {
+                                        callback.onSuccess(new org.json.JSONObject().put("properties", properties));
+                                    } catch (org.json.JSONException e) {
+                                        callback.onError("Error: " + e.getMessage());
+                                    }
+                                }
+                            });
                         } else {
                             callback.onError("Failed to fetch: " + response.code());
                         }

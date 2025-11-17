@@ -49,4 +49,18 @@
     <string name="navigation_drawer_close">Close navigation drawer</string>
     <string name="profile_image">Profile Image</string>
     <string name="back">Back</string>
+
+    <!-- Add Listing Strings -->
+    <string name="property_photos">Property Photos</string>
+    <string name="property_name_hint">Enter property name</string>
+    <string name="description_hint">Enter description</string>
+    <string name="full_address_hint">Enter full address</string>
+    <string name="monthly_rent_hint">Enter monthly rent</string>
+    <string name="security_deposit_hint">Enter security deposit</string>
+    <string name="wi_fi">Wi-Fi</string>
+    <string name="ac">Air Conditioning</string>
+    <string name="furnished">Furnished</string>
+    <string name="kitchen">Kitchen</string>
+    <string name="parking">Parking</string>
+    <string name="save_and_publish">Save and Publish</string>
 </resources>

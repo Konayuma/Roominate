@@ -196,8 +196,8 @@ public class TenantProfileActivity extends AppCompatActivity {
     private void setupListeners() {
         if (editButton != null) {
             editButton.setOnClickListener(v -> {
-                // TODO: Open edit profile dialog or activity
-                Toast.makeText(this, "Edit profile functionality coming soon!", Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(TenantProfileActivity.this, EditProfileActivity.class);
+                startActivity(intent);
             });
         }
         

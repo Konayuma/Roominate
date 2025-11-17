@@ -5,7 +5,6 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
-import android.widget.CompoundButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -13,6 +12,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import com.google.android.material.appbar.MaterialToolbar;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.roominate.R;
 import com.roominate.activities.auth.LoginActivity;
@@ -203,53 +203,46 @@ public class SettingsActivity extends AppCompatActivity {
     }
     
     private void loadSettings() {
-        // Load notification settings
+        // Load notification settings - default to disabled for cleaner appearance
         if (notificationSwitch != null) {
-            notificationSwitch.setChecked(prefs.getBoolean("notifications_enabled", true));
+            notificationSwitch.setChecked(prefs.getBoolean("notifications_enabled", false));
         }
         if (bookingAlertsSwitch != null) {
-            bookingAlertsSwitch.setChecked(prefs.getBoolean("booking_alerts_enabled", true));
+            bookingAlertsSwitch.setChecked(prefs.getBoolean("booking_alerts_enabled", false));
         }
         if (messagesSwitch != null) {
-            messagesSwitch.setChecked(prefs.getBoolean("messages_enabled", true));
+            messagesSwitch.setChecked(prefs.getBoolean("messages_enabled", false));
         }
         
-        // Load appearance settings
+        // Load appearance settings - light mode is default
         if (darkModeSwitch != null) {
             darkModeSwitch.setChecked(prefs.getBoolean("dark_mode_enabled", false));
         }
     }
     
     private void openEditProfile() {
-        // Navigate to appropriate profile activity based on role
-        Intent intent;
-        if ("owner".equalsIgnoreCase(userRole)) {
-            intent = new Intent(this, com.roominate.activities.owner.OwnerProfileActivity.class);
-        } else {
-            intent = new Intent(this, TenantProfileActivity.class);
-        }
+        Intent intent = new Intent(this, EditProfileActivity.class);
         startActivity(intent);
     }
     
     private void changePassword() {
-        // Show password change dialog
         View dialogView = getLayoutInflater().inflate(R.layout.dialog_change_password, null);
+
+        MaterialButton cancelButton = dialogView.findViewById(R.id.cancelButton);
+        MaterialButton submitButton = dialogView.findViewById(R.id.submitButton);
+
         AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle("Change Password")
             .setView(dialogView)
-            .setPositiveButton("Change", null)
-            .setNegativeButton("Cancel", null)
             .create();
-        
-        dialog.setOnShowListener(dialogInterface -> {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-                // Get new password from dialog
-                // TODO: Implement password change via Supabase
-                Toast.makeText(this, "Password change functionality coming soon", Toast.LENGTH_SHORT).show();
-                dialog.dismiss();
-            });
+
+        cancelButton.setOnClickListener(v -> dialog.dismiss());
+
+        submitButton.setOnClickListener(v -> {
+            // TODO: Implement password change via Supabase
+            Toast.makeText(this, "Password change functionality coming soon", Toast.LENGTH_SHORT).show();
+            dialog.dismiss();
         });
-        
+
         dialog.show();
     }
     

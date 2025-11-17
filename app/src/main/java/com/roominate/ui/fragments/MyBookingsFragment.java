@@ -6,6 +6,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -86,8 +87,7 @@ public class MyBookingsFragment extends Fragment {
         bookingAdapter = new BookingAdapter(getContext(), new BookingAdapter.OnBookingActionListener() {
             @Override
             public void onViewDetails(Booking booking) {
-                Toast.makeText(getContext(), "Booking: " + booking.getPropertyName(), Toast.LENGTH_SHORT).show();
-                // TODO: Navigate to booking details
+                showBookingReceipt(booking);
             }
 
             @Override
@@ -95,10 +95,9 @@ public class MyBookingsFragment extends Fragment {
                 // Show confirmation dialog before canceling
                 new AlertDialog.Builder(requireContext())
                     .setTitle("Cancel Booking")
-                    .setMessage("Are you sure you want to cancel this booking?")
+                    .setMessage("Are you sure you want to cancel this booking for " + booking.getPropertyName() + "?")
                     .setPositiveButton("Yes", (dialog, which) -> {
-                        // TODO: Call API to cancel booking
-                        Toast.makeText(getContext(), "Booking canceled", Toast.LENGTH_SHORT).show();
+                        cancelBooking(booking);
                     })
                     .setNegativeButton("No", null)
                     .show();
@@ -299,5 +298,111 @@ public class MyBookingsFragment extends Fragment {
             bookingsRecyclerView.setVisibility(View.VISIBLE);
             noBookingsMessage.setVisibility(View.GONE);
         }
+    }
+
+    private void showBookingReceipt(Booking booking) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_booking_receipt, null);
+        builder.setView(dialogView);
+        
+        AlertDialog dialog = builder.create();
+        
+        // Populate receipt fields
+        TextView bookingIdText = dialogView.findViewById(R.id.bookingIdText);
+        TextView statusBadge = dialogView.findViewById(R.id.receiptStatusBadge);
+        ImageView propertyImage = dialogView.findViewById(R.id.receiptPropertyImage);
+        TextView propertyName = dialogView.findViewById(R.id.receiptPropertyName);
+        TextView propertyAddress = dialogView.findViewById(R.id.receiptPropertyAddress);
+        TextView moveInDate = dialogView.findViewById(R.id.receiptMoveInDate);
+        TextView duration = dialogView.findViewById(R.id.receiptDuration);
+        TextView moveOutDate = dialogView.findViewById(R.id.receiptMoveOutDate);
+        TextView bookingDate = dialogView.findViewById(R.id.receiptBookingDate);
+        TextView monthlyRate = dialogView.findViewById(R.id.receiptMonthlyRate);
+        TextView securityDeposit = dialogView.findViewById(R.id.receiptSecurityDeposit);
+        TextView totalAmount = dialogView.findViewById(R.id.receiptTotalAmount);
+        TextView contactPerson = dialogView.findViewById(R.id.receiptContactPerson);
+        TextView contactPhone = dialogView.findViewById(R.id.receiptContactPhone);
+        
+        // Set data
+        SimpleDateFormat dateFormat = new SimpleDateFormat("MMM dd, yyyy", Locale.getDefault());
+        
+        bookingIdText.setText("Booking ID: #" + booking.getId().substring(0, 8));
+        propertyName.setText(booking.getPropertyName());
+        propertyAddress.setText(booking.getPropertyAddress());
+        
+        // Status badge
+        String status = booking.getStatus();
+        statusBadge.setText(status.toUpperCase());
+        if ("confirmed".equalsIgnoreCase(status)) {
+            statusBadge.setBackgroundResource(R.drawable.badge_background);
+        } else if ("pending".equalsIgnoreCase(status)) {
+            statusBadge.setBackgroundColor(getResources().getColor(android.R.color.holo_orange_light));
+        }
+        
+        // Dates
+        if (booking.getMoveInDate() != null) {
+            moveInDate.setText(dateFormat.format(booking.getMoveInDate()));
+        }
+        if (booking.getMoveOutDate() != null) {
+            moveOutDate.setText(dateFormat.format(booking.getMoveOutDate()));
+        }
+        if (booking.getCreatedAt() != null) {
+            bookingDate.setText(dateFormat.format(booking.getCreatedAt()));
+        }
+        
+        // Get duration from booking model
+        int durationMonths = booking.getDurationMonths();
+        if (durationMonths <= 0) durationMonths = 1;
+        duration.setText(durationMonths + " month" + (durationMonths > 1 ? "s" : ""));
+        
+        monthlyRate.setText("K" + String.format(Locale.getDefault(), "%,.2f", booking.getMonthlyRate()));
+        securityDeposit.setText("K" + String.format(Locale.getDefault(), "%,.2f", booking.getSecurityDeposit()));
+        totalAmount.setText("K" + String.format(Locale.getDefault(), "%,.2f", booking.getTotalAmount()));
+        
+        // Contact info - show property address
+        contactPerson.setText(booking.getPropertyAddress() != null ? booking.getPropertyAddress() : "N/A");
+        contactPhone.setText("Contact via app");
+        
+        // Load property image if available
+        if (booking.getPropertyImageUrl() != null && !booking.getPropertyImageUrl().isEmpty()) {
+            com.squareup.picasso.Picasso.get()
+                .load(booking.getPropertyImageUrl())
+                .placeholder(R.drawable.ic_house_placeholder)
+                .error(R.drawable.ic_house_placeholder)
+                .fit()
+                .centerCrop()
+                .into(propertyImage);
+        }
+        
+        // Close button
+        dialogView.findViewById(R.id.closeButton).setOnClickListener(v -> dialog.dismiss());
+        
+        dialog.show();
+    }
+
+    private void cancelBooking(Booking booking) {
+        // TODO: Implement API call to cancel booking
+        String bookingId = booking.getId();
+        
+        supabaseClient.updateBookingStatus(bookingId, "cancelled", new SupabaseClient.ApiCallback() {
+            @Override
+            public void onSuccess(JSONObject result) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Booking cancelled successfully", Toast.LENGTH_SHORT).show();
+                        loadBookings(currentFilter); // Reload bookings
+                    });
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Failed to cancel booking: " + error, Toast.LENGTH_SHORT).show();
+                    });
+                }
+            }
+        });
     }
 }

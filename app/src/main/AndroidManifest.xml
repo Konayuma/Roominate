@@ -81,6 +81,7 @@
         <activity android:name=".activities.tenant.BookingActivity" />
         <activity android:name=".activities.tenant.MyBookingsActivity" />
         <activity android:name=".activities.tenant.TenantProfileActivity" />
+        <activity android:name=".activities.tenant.EditProfileActivity" />
         <activity android:name=".activities.tenant.SettingsActivity" />
         
         <!-- Owner Activities -->

@@ -76,6 +76,19 @@ public class BookingAdapter extends RecyclerView.Adapter<BookingAdapter.BookingV
             holder.cancelButton.setVisibility(View.GONE);
         }
         
+        // Load property image with Picasso
+        if (booking.getPropertyImageUrl() != null && !booking.getPropertyImageUrl().isEmpty()) {
+            com.squareup.picasso.Picasso.get()
+                .load(booking.getPropertyImageUrl())
+                .placeholder(R.drawable.ic_house_placeholder)
+                .error(R.drawable.ic_house_placeholder)
+                .fit()
+                .centerCrop()
+                .into(holder.propertyImageView);
+        } else {
+            holder.propertyImageView.setImageResource(R.drawable.ic_house_placeholder);
+        }
+        
         // Set click listeners
         holder.viewDetailsButton.setOnClickListener(v -> {
             if (listener != null) {
@@ -88,9 +101,6 @@ public class BookingAdapter extends RecyclerView.Adapter<BookingAdapter.BookingV
                 listener.onCancelBooking(booking);
             }
         });
-        
-        // TODO: Load property image with Glide or similar
-        // Glide.with(context).load(booking.getPropertyImageUrl()).into(holder.propertyImageView);
     }
 
     @Override

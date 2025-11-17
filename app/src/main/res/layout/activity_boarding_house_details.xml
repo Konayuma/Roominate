@@ -19,11 +19,45 @@
             app:layout_scrollFlags="scroll|exitUntilCollapsed"
             app:contentScrim="?attr/colorPrimary">
 
-            <androidx.viewpager2.widget.ViewPager2
-                android:id="@+id/imagesViewPager"
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                app:layout_collapseMode="parallax" />
+                app:layout_collapseMode="parallax">
+
+                <androidx.viewpager2.widget.ViewPager2
+                    android:id="@+id/imagesViewPager"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <!-- Dot Indicators -->
+                <LinearLayout
+                    android:id="@+id/dotsIndicator"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|center_horizontal"
+                    android:layout_marginBottom="16dp"
+                    android:orientation="horizontal"
+                    android:padding="8dp"
+                    android:background="@drawable/bg_dots_container" />
+
+                <!-- Image Counter -->
+                <TextView
+                    android:id="@+id/imageCounter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|end"
+                    android:layout_margin="16dp"
+                    android:background="@drawable/bg_image_counter"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:text="1/1"
+                    android:textColor="@android:color/white"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+            </FrameLayout>
 
             <com.google.android.material.appbar.MaterialToolbar
                 android:id="@+id/toolbar"
