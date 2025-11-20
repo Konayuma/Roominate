@@ -90,7 +90,8 @@ public class Property {
         property.setName(jsonObject.optString("name"));
         property.setDescription(jsonObject.optString("description"));
         property.setAddress(jsonObject.optString("address"));
-        property.setMonthlyRate(jsonObject.optDouble("monthly_rate", 0.0));
+        // Database column is price_per_month, but fall back to monthly_rate for backward compatibility
+        property.setMonthlyRate(jsonObject.optDouble("price_per_month", jsonObject.optDouble("monthly_rate", 0.0)));
         property.setSecurityDeposit(jsonObject.optDouble("security_deposit", 0.0));
         property.setStatus(jsonObject.optString("status", "draft"));
         property.setLatitude(jsonObject.optDouble("latitude", 0.0));
@@ -133,7 +134,8 @@ public class Property {
         jsonObject.put("name", name);
         jsonObject.put("description", description);
         jsonObject.put("address", address);
-        jsonObject.put("monthly_rate", monthlyRate);
+        // Use price_per_month to match database column name
+        jsonObject.put("price_per_month", monthlyRate);
         jsonObject.put("security_deposit", securityDeposit);
         jsonObject.put("status", status);
         jsonObject.put("latitude", latitude);

@@ -170,10 +170,20 @@ public class EditProfileActivity extends AppCompatActivity {
         
         try {
             // Build update object
+            // Note: profiles table has first_name and last_name, not full_name
             JSONObject updateData = new JSONObject();
-            updateData.put("full_name", fullName);
+            
+            // Split full name into first and last name
+            String[] nameParts = fullName.trim().split("\\s+", 2);
+            String firstName = nameParts.length > 0 ? nameParts[0] : fullName;
+            String lastName = nameParts.length > 1 ? nameParts[1] : "";
+            
+            updateData.put("first_name", firstName);
+            updateData.put("last_name", lastName);
             updateData.put("phone", phone);
-            updateData.put("occupation", occupation);
+            
+            // Note: 'occupation' field is not stored in profiles table
+            // It's only used for display purposes in the app
             
             // Update profile in Supabase
             SupabaseClient.getInstance().updateUserProfile(updateData, new SupabaseClient.ApiCallback() {

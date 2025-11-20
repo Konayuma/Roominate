@@ -13,6 +13,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RadioGroup;
 import android.widget.RatingBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -26,10 +27,12 @@ import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.chip.ChipGroup;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.textfield.TextInputEditText;
 import com.roominate.BuildConfig;
 import com.roominate.R;
 import com.roominate.adapters.ReviewsAdapter;
 import com.roominate.models.BoardingHouse;
+import com.roominate.services.PaymentService;
 import com.roominate.services.SupabaseClient;
 import com.squareup.picasso.Picasso;
 import org.json.JSONArray;
@@ -38,12 +41,17 @@ import org.json.JSONObject;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Locale;
 import okhttp3.*;
 import java.io.IOException;
+import android.app.DatePickerDialog;
+import android.app.ProgressDialog;
 
 public class BoardingHouseDetailsActivity extends AppCompatActivity {
     private static final String TAG = "BoardingHouseDetails";
+    private static final int REQUEST_CODE_PAYMENT = 1001;
 
     private ViewPager2 imagesViewPager;
     private LinearLayout dotsIndicator;
@@ -72,6 +80,12 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
     private JSONArray reviewsData;
     private String favoriteId = null;
     private OkHttpClient httpClient;
+
+    private AlertDialog paymentStatusDialog;
+    private Handler pollingHandler;
+    private Runnable pollingRunnable;
+    private static final int POLLING_INTERVAL_MS = 5000; // 5 seconds
+    private static final int POLLING_TIMEOUT_MS = 120000; // 2 minutes
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -191,7 +205,7 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
                         boardingHouse.setAddress(jsonObject.optString("address"));
                         boardingHouse.setCity(jsonObject.optString("city"));
                         boardingHouse.setProvince(jsonObject.optString("province"));
-                        boardingHouse.setPricePerMonth(jsonObject.optDouble("monthly_rate", 0.0));
+                        boardingHouse.setPricePerMonth(jsonObject.optDouble("price_per_month", jsonObject.optDouble("monthly_rate", 0.0)));
                         boardingHouse.setSecurityDeposit(jsonObject.optDouble("security_deposit", 0.0));
                         boardingHouse.setAvailableRooms(jsonObject.optInt("available_rooms", 0));
                         boardingHouse.setTotalRooms(jsonObject.optInt("total_rooms", 0));
@@ -600,9 +614,421 @@ public class BoardingHouseDetailsActivity extends AppCompatActivity {
     }
 
     private void bookBoardingHouse() {
-        Intent intent = new Intent(this, BookingActivity.class);
-        intent.putExtra("boarding_house_id", boardingHouseId);
-        startActivity(intent);
+        if (userId == null || userId.isEmpty()) {
+            Toast.makeText(this, "Please sign in to book", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (boardingHouse == null) {
+            Toast.makeText(this, "Property information not available", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        showBookingDialog();
+    }
+    
+    private void showBookingDialog() {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_booking_details, null);
+        TextInputEditText moveInDateEdit = dialogView.findViewById(R.id.moveInDateEditText);
+        TextInputEditText durationEdit = dialogView.findViewById(R.id.durationEditText);
+        TextView totalAmountText = dialogView.findViewById(R.id.totalAmountTextView);
+        
+        // Set up date picker for move-in date
+        Calendar calendar = Calendar.getInstance();
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+        moveInDateEdit.setText(dateFormat.format(calendar.getTime()));
+        
+        moveInDateEdit.setOnClickListener(v -> {
+            DatePickerDialog datePicker = new DatePickerDialog(
+                this,
+                (view, year, month, dayOfMonth) -> {
+                    calendar.set(year, month, dayOfMonth);
+                    moveInDateEdit.setText(dateFormat.format(calendar.getTime()));
+                    updateTotalAmount(totalAmountText, durationEdit.getText().toString());
+                },
+                calendar.get(Calendar.YEAR),
+                calendar.get(Calendar.MONTH),
+                calendar.get(Calendar.DAY_OF_MONTH)
+            );
+            datePicker.getDatePicker().setMinDate(System.currentTimeMillis());
+            datePicker.show();
+        });
+        
+        // Update total when duration changes
+        durationEdit.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                updateTotalAmount(totalAmountText, s.toString());
+            }
+            
+            @Override
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+        
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("Booking Details")
+            .setView(dialogView)
+            .setPositiveButton("Confirm & Pay", null)
+            .setNegativeButton("Cancel", null)
+            .create();
+        
+        dialog.setOnShowListener(dialogInterface -> {
+            Button confirmButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            confirmButton.setOnClickListener(v -> {
+                String moveInDate = moveInDateEdit.getText().toString();
+                String durationStr = durationEdit.getText().toString();
+                
+                if (moveInDate.isEmpty() || durationStr.isEmpty()) {
+                    Toast.makeText(this, "Please fill all fields", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                
+                try {
+                    int duration = Integer.parseInt(durationStr);
+                    if (duration < 1) {
+                        Toast.makeText(this, "Duration must be at least 1 month", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    
+                    double totalAmount = (boardingHouse.getPricePerMonth() + boardingHouse.getSecurityDeposit()) * duration;
+                    dialog.dismiss();
+                    createBookingAndInitiatePayment(moveInDate, duration, totalAmount);
+                } catch (NumberFormatException e) {
+                    Toast.makeText(this, "Please enter a valid duration", Toast.LENGTH_SHORT).show();
+                }
+            });
+        });
+        
+        dialog.show();
+    }
+    
+    private void updateTotalAmount(TextView totalAmountText, String durationStr) {
+        if (boardingHouse == null || durationStr.isEmpty()) {
+            totalAmountText.setText("Total: ZMW 0.00");
+            return;
+        }
+        
+        try {
+            int duration = Integer.parseInt(durationStr);
+            double total = (boardingHouse.getPricePerMonth() + boardingHouse.getSecurityDeposit()) * duration;
+            totalAmountText.setText(String.format(Locale.US, "Total: ZMW %.2f", total));
+        } catch (NumberFormatException e) {
+            totalAmountText.setText("Total: ZMW 0.00");
+        }
+    }
+    
+    private void createBookingAndInitiatePayment(String moveInDate, int duration, double totalAmount) {
+        final ProgressDialog progressDialog = new ProgressDialog(this);
+        progressDialog.setMessage("Creating your booking...");
+        progressDialog.setCancelable(false);
+        progressDialog.show();
+
+        // Get user details from SharedPreferences
+        SharedPreferences prefs = getSharedPreferences("roominate_prefs", Context.MODE_PRIVATE);
+        String email = prefs.getString("email", "");
+        String phone = prefs.getString("phone", "");
+        String firstName = prefs.getString("first_name", "");
+        String lastName = prefs.getString("last_name", "");
+
+        if (phone.isEmpty() || email.isEmpty()) {
+            Toast.makeText(this, "User details not found. Please update your profile.", Toast.LENGTH_LONG).show();
+            progressDialog.dismiss();
+            return;
+        }
+
+        try {
+            // 1. Create the booking with a 'pending' status first
+            JSONObject bookingData = new JSONObject();
+            bookingData.put("listing_id", boardingHouseId);
+            bookingData.put("start_date", moveInDate);
+            Calendar calendar = Calendar.getInstance();
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+            calendar.setTime(dateFormat.parse(moveInDate));
+            calendar.add(Calendar.MONTH, duration);
+            String endDate = dateFormat.format(calendar.getTime());
+            bookingData.put("end_date", endDate);
+            bookingData.put("total_amount", totalAmount);
+            bookingData.put("status", "pending"); // Start as pending
+            bookingData.put("payment_status", "pending");
+
+            SupabaseClient.getInstance().createBooking(bookingData, new SupabaseClient.ApiCallback() {
+                @Override
+                public void onSuccess(JSONObject response) {
+                    try {
+                        JSONObject booking = response.getJSONObject("booking");
+                        String bookingId = booking.getString("id");
+                        Log.d(TAG, "Booking created with pending status. ID: " + bookingId);
+
+                        // 2. Initiate payment via Lenco
+                        initiateLencoPayment(progressDialog, bookingId, totalAmount, email, phone, firstName, lastName, moveInDate, endDate, duration);
+
+                    } catch (JSONException e) {
+                        Log.e(TAG, "Error parsing booking response", e);
+                        runOnUiThread(() -> {
+                            progressDialog.dismiss();
+                            Toast.makeText(BoardingHouseDetailsActivity.this, "Failed to create booking.", Toast.LENGTH_LONG).show();
+                        });
+                    }
+                }
+
+                @Override
+                public void onError(String error) {
+                    runOnUiThread(() -> {
+                        progressDialog.dismiss();
+                        Toast.makeText(BoardingHouseDetailsActivity.this, "Booking creation failed: " + error, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error preparing booking data", e);
+            progressDialog.dismiss();
+            Toast.makeText(this, "Error creating booking data", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void initiateLencoPayment(ProgressDialog progressDialog, String bookingId, double totalAmount, String email, String phone, String firstName, String lastName, String moveInDate, String endDate, int duration) {
+        progressDialog.setMessage("Initiating payment...");
+
+        PaymentService.getInstance().initiatePayment(bookingId, totalAmount, "ZMW", email, phone, firstName, lastName, new SupabaseClient.ApiCallback() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                runOnUiThread(() -> {
+                    progressDialog.dismiss();
+                    try {
+                        String reference = response.getString("reference");
+                        boolean requiresAuth = response.optBoolean("requires_authorization", false);
+                        String message = response.optString("message", "Payment initiated");
+                        String paymentStatus = response.optString("payment_status", "unknown");
+                        
+                        Log.d(TAG, "Lenco payment initiated. Reference: " + reference + ", Status: " + paymentStatus + ", Requires Auth: " + requiresAuth);
+                        
+                        showPaymentStatusDialog(reference, moveInDate, endDate, duration, totalAmount, requiresAuth, message);
+                        startPollingPaymentStatus(reference, bookingId, moveInDate, endDate, duration, totalAmount);
+                    } catch (JSONException e) {
+                        Log.e(TAG, "Error parsing payment initiation response", e);
+                        Toast.makeText(BoardingHouseDetailsActivity.this, "Payment initiation failed.", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    progressDialog.dismiss();
+                    Log.e(TAG, "Payment initiation failed: " + error);
+                    Toast.makeText(BoardingHouseDetailsActivity.this, "Failed to initiate payment: " + error, Toast.LENGTH_LONG).show();
+                });
+            }
+        });
+    }
+
+    private void showPaymentStatusDialog(String reference, String moveInDate, String endDate, int duration, double totalAmount, boolean requiresAuth, String message) {
+        if (paymentStatusDialog != null && paymentStatusDialog.isShowing()) {
+            paymentStatusDialog.dismiss();
+        }
+
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_payment_status, null);
+        TextView statusMessage = dialogView.findViewById(R.id.tv_status_message);
+        Button cancelButton = dialogView.findViewById(R.id.btn_cancel_payment);
+
+        // Update message based on authorization requirement
+        if (requiresAuth) {
+            statusMessage.setText("Please check your phone and authorize the mobile money payment. You will receive a prompt from your mobile network operator.");
+        } else {
+            statusMessage.setText(message != null ? message : "Processing your payment. Please wait...");
+        }
+
+        paymentStatusDialog = new AlertDialog.Builder(this)
+                .setView(dialogView)
+                .setCancelable(false)
+                .create();
+
+        cancelButton.setOnClickListener(v -> {
+            stopPolling();
+            paymentStatusDialog.dismiss();
+            Toast.makeText(this, "Payment cancelled.", Toast.LENGTH_SHORT).show();
+        });
+
+        paymentStatusDialog.show();
+    }
+
+    private void startPollingPaymentStatus(String reference, String bookingId, String moveInDate, String endDate, int duration, double totalAmount) {
+        stopPolling(); // Ensure no other polling is running
+
+        pollingHandler = new Handler(Looper.getMainLooper());
+        final long startTime = System.currentTimeMillis();
+
+        pollingRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (System.currentTimeMillis() - startTime > POLLING_TIMEOUT_MS) {
+                    Log.w(TAG, "Polling timed out for reference: " + reference);
+                    stopPolling();
+                    runOnUiThread(() -> {
+                        if (paymentStatusDialog != null && paymentStatusDialog.isShowing()) {
+                            paymentStatusDialog.dismiss();
+                        }
+                        Toast.makeText(BoardingHouseDetailsActivity.this, "Payment timed out. Please try again.", Toast.LENGTH_LONG).show();
+                    });
+                    return;
+                }
+
+                Log.d(TAG, "Polling for payment status for reference: " + reference);
+                checkPaymentStatus(reference, bookingId, moveInDate, endDate, duration, totalAmount);
+                pollingHandler.postDelayed(this, POLLING_INTERVAL_MS);
+            }
+        };
+
+        pollingHandler.post(pollingRunnable);
+    }
+
+    private void stopPolling() {
+        if (pollingHandler != null && pollingRunnable != null) {
+            pollingHandler.removeCallbacks(pollingRunnable);
+            pollingHandler = null;
+            pollingRunnable = null;
+        }
+    }
+
+    private void checkPaymentStatus(String reference, String bookingId, String moveInDate, String endDate, int duration, double totalAmount) {
+        PaymentService.getInstance().getPaymentStatus(reference, new SupabaseClient.ApiCallback() {
+            @Override
+            public void onSuccess(JSONObject response) {
+                try {
+                    String status = response.optString("status", "unknown");
+                    Log.d(TAG, "Payment status for " + reference + " is " + status);
+
+                    if ("successful".equalsIgnoreCase(status) || "completed".equalsIgnoreCase(status)) {
+                        stopPolling();
+                        runOnUiThread(() -> {
+                            if (paymentStatusDialog != null && paymentStatusDialog.isShowing()) {
+                                paymentStatusDialog.dismiss();
+                            }
+                            // The booking status is updated by a webhook, but we can show the receipt now.
+                            SharedPreferences prefs = getSharedPreferences("roominate_prefs", Context.MODE_PRIVATE);
+                            String phone = prefs.getString("phone", "");
+                            showBookingReceiptDialog(bookingId, moveInDate, endDate, duration, totalAmount, "Mobile Money", phone);
+                        });
+                    } else if ("failed".equalsIgnoreCase(status)) {
+                        stopPolling();
+                        runOnUiThread(() -> {
+                            if (paymentStatusDialog != null && paymentStatusDialog.isShowing()) {
+                                paymentStatusDialog.dismiss();
+                            }
+                            Toast.makeText(BoardingHouseDetailsActivity.this, "Payment failed. Please try again.", Toast.LENGTH_LONG).show();
+                        });
+                    }
+                    // If status is still 'pending', the poller will just run again.
+
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing payment status response", e);
+                    // Continue polling
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                Log.e(TAG, "Error checking payment status: " + error);
+                // Continue polling, maybe a transient network error
+            }
+        });
+    }
+
+    
+    /**
+     * Show booking receipt dialog after successful booking
+     */
+    private void showBookingReceiptDialog(String bookingId, String moveInDate, String endDate, int duration, double totalAmount, String provider, String phoneNumber) {
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_booking_receipt, null);
+        
+        TextView bookingIdText = dialogView.findViewById(R.id.bookingIdText);
+        TextView receiptPropertyName = dialogView.findViewById(R.id.receiptPropertyName);
+        TextView receiptPropertyAddress = dialogView.findViewById(R.id.receiptPropertyAddress);
+        TextView receiptMoveInDate = dialogView.findViewById(R.id.receiptMoveInDate);
+        TextView receiptDuration = dialogView.findViewById(R.id.receiptDuration);
+        TextView receiptMoveOutDate = dialogView.findViewById(R.id.receiptMoveOutDate);
+        TextView receiptMonthlyRate = dialogView.findViewById(R.id.receiptMonthlyRate);
+        TextView receiptSecurityDeposit = dialogView.findViewById(R.id.receiptSecurityDeposit);
+        TextView receiptTotalAmount = dialogView.findViewById(R.id.receiptTotalAmount);
+        TextView receiptContactPerson = dialogView.findViewById(R.id.receiptContactPerson);
+        TextView receiptContactPhone = dialogView.findViewById(R.id.receiptContactPhone);
+        ImageView receiptPropertyImage = dialogView.findViewById(R.id.receiptPropertyImage);
+        Button closeButton = dialogView.findViewById(R.id.closeButton);
+        
+        // Set booking details
+        bookingIdText.setText("Booking ID: #" + bookingId.substring(0, Math.min(8, bookingId.length())));
+        
+        if (boardingHouse != null) {
+            receiptPropertyName.setText(boardingHouse.getName());
+            receiptPropertyAddress.setText(boardingHouse.getAddress());
+            receiptMonthlyRate.setText(String.format(Locale.US, "K%.2f", boardingHouse.getPricePerMonth()));
+            receiptSecurityDeposit.setText(String.format(Locale.US, "K%.2f", boardingHouse.getSecurityDeposit()));
+            receiptContactPerson.setText(boardingHouse.getContactPerson());
+            receiptContactPhone.setText(boardingHouse.getContactPhone());
+            
+            // Load property image
+            if (boardingHouse.getImageUrls() != null && !boardingHouse.getImageUrls().isEmpty()) {
+                Picasso.get()
+                    .load(fixImageUrl(boardingHouse.getImageUrls().get(0)))
+                    .fit()
+                    .centerCrop()
+                    .placeholder(R.drawable.ic_house_placeholder)
+                    .error(R.drawable.ic_house_placeholder)
+                    .into(receiptPropertyImage);
+            }
+        }
+        
+        // Format dates
+        SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+        SimpleDateFormat outputFormat = new SimpleDateFormat("MMM dd, yyyy", Locale.US);
+        try {
+            receiptMoveInDate.setText(outputFormat.format(inputFormat.parse(moveInDate)));
+            receiptMoveOutDate.setText(outputFormat.format(inputFormat.parse(endDate)));
+        } catch (Exception e) {
+            receiptMoveInDate.setText(moveInDate);
+            receiptMoveOutDate.setText(endDate);
+        }
+        
+        receiptDuration.setText(String.format(Locale.US, "%d month%s", duration, duration > 1 ? "s" : ""));
+        receiptTotalAmount.setText(String.format(Locale.US, "K%.2f", totalAmount));
+        
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setCancelable(false)
+            .create();
+        
+        closeButton.setOnClickListener(v -> {
+            dialog.dismiss();
+            Toast.makeText(BoardingHouseDetailsActivity.this, 
+                "Booking confirmed! Check 'My Bookings' for details.", Toast.LENGTH_LONG).show();
+            finish();
+        });
+        
+        dialog.show();
+    }
+    
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        if (requestCode == REQUEST_CODE_PAYMENT) {
+            if (resultCode == RESULT_OK && data != null) {
+                String status = data.getStringExtra("payment_status");
+                if ("completed".equals(status)) {
+                    Toast.makeText(this, "Booking confirmed! Payment successful.", Toast.LENGTH_LONG).show();
+                    // Optionally navigate to bookings list
+                    finish();
+                } else {
+                    Toast.makeText(this, "Payment status: " + status, Toast.LENGTH_LONG).show();
+                }
+            } else {
+                Toast.makeText(this, "Payment cancelled or failed", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private void toggleFavorite() {

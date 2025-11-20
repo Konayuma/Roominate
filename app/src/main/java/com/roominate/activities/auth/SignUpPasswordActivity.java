@@ -1,6 +1,7 @@
 package com.roominate.activities.auth;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextUtils;
@@ -204,6 +205,83 @@ public class SignUpPasswordActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     if (progressBar != null) progressBar.setVisibility(View.GONE);
                     continueButton.setEnabled(true);
+
+                    try {
+                        // Save user session data to SharedPreferences
+                        JSONObject user = response.optJSONObject("user");
+                        JSONObject profile = response.optJSONObject("profile");
+                        JSONObject session = response.optJSONObject("session");
+                        
+                        if (user != null && profile != null) {
+                            SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
+                            SharedPreferences.Editor editor = prefs.edit();
+                            
+                            String userId = user.optString("id");
+                            String userEmail = user.optString("email");
+                            String userFirstName = profile.optString("first_name");
+                            String userLastName = profile.optString("last_name");
+                            String userPhone = profile.optString("phone");
+                            String userRole = profile.optString("role");
+                            
+                            editor.putString("user_id", userId);
+                            editor.putString("email", userEmail);
+                            editor.putString("user_email", userEmail);  // For ProfileFragment compatibility
+                            editor.putString("user_role", userRole);
+                            editor.putString("first_name", userFirstName);
+                            editor.putString("last_name", userLastName);
+                            editor.putString("full_name", (userFirstName + " " + userLastName).trim());  // Combined name
+                            editor.putString("user_name", (userFirstName + " " + userLastName).trim());  // For compatibility
+                            editor.putString("phone", userPhone);
+                            editor.putBoolean("is_logged_in", true);
+                            
+                            // Save session tokens if available
+                            if (session != null) {
+                                String accessToken = session.optString("access_token");
+                                String refreshToken = session.optString("refresh_token");
+                                if (!accessToken.isEmpty()) {
+                                    editor.putString("access_token", accessToken);
+                                    Log.d("SignUpPassword", "Access token saved");
+                                }
+                                if (!refreshToken.isEmpty()) {
+                                    editor.putString("refresh_token", refreshToken);
+                                    Log.d("SignUpPassword", "Refresh token saved");
+                                }
+                            }
+                            
+                            // Create user_data JSON for backward compatibility with AddPropertyActivity and others
+                            // Structure must match what login stores: { id, email, user_metadata: { role, first_name, last_name, email } }
+                            JSONObject userData = new JSONObject();
+                            userData.put("id", userId);
+                            userData.put("email", user.optString("email"));
+                            
+                            JSONObject userMetadata = new JSONObject();
+                            userMetadata.put("first_name", profile.optString("first_name"));
+                            userMetadata.put("last_name", profile.optString("last_name"));
+                            userMetadata.put("role", profile.optString("role"));
+                            userMetadata.put("email", user.optString("email"));
+                            userData.put("user_metadata", userMetadata);
+                            
+                            editor.putString("user_data", userData.toString());
+                            Log.d("SignUpPassword", "user_data JSON saved with structure matching login");
+                            
+                            // Also save to user_session SharedPreferences for consistency
+                            SharedPreferences userSession = getSharedPreferences("user_session", MODE_PRIVATE);
+                            SharedPreferences.Editor sessionEditor = userSession.edit();
+                            sessionEditor.putString("user_id", userId);
+                            sessionEditor.putString("email", user.optString("email"));
+                            sessionEditor.putString("full_name", profile.optString("first_name") + " " + profile.optString("last_name"));
+                            sessionEditor.putString("phone", profile.optString("phone"));
+                            sessionEditor.apply();
+                            
+                            editor.apply();
+                            
+                            Log.d("SignUpPassword", "Session saved - user_id: " + userId + ", role: " + profile.optString("role"));
+                        } else {
+                            Log.w("SignUpPassword", "Missing user or profile in response");
+                        }
+                    } catch (Exception e) {
+                        Log.e("SignUpPassword", "Error saving session", e);
+                    }
 
                     Toast.makeText(SignUpPasswordActivity.this, "Registration completed successfully!", Toast.LENGTH_SHORT).show();
 

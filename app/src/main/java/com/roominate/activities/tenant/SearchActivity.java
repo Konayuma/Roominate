@@ -248,7 +248,7 @@ public class SearchActivity extends AppCompatActivity {
                     marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
                     marker.setTitle(property.optString("name", "Property"));
                     
-                    String price = String.format("K%.0f/month", property.optDouble("monthly_rate", 0));
+                    String price = String.format("K%.0f/month", property.optDouble("price_per_month", property.optDouble("monthly_rate", 0)));
                     marker.setSnippet(price);
                     
                     // Store property ID in marker for click handling

@@ -1,19 +1,22 @@
 package com.roominate.activities.auth;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
-import android.widget.Button;
-import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.textfield.TextInputEditText;
+import com.google.android.material.textfield.TextInputLayout;
 import com.roominate.R;
 
 public class ForgotPasswordActivity extends AppCompatActivity {
 
-    private EditText emailEditText;
-    private Button resetPasswordButton;
+    private TextInputLayout emailLayout;
+    private TextInputEditText emailEditText;
+    private MaterialButton resetPasswordButton;
     private ProgressBar progressBar;
 
     @Override
@@ -32,6 +35,7 @@ public class ForgotPasswordActivity extends AppCompatActivity {
     }
 
     private void initializeViews() {
+        emailLayout = findViewById(R.id.emailLayout);
         emailEditText = findViewById(R.id.emailEditText);
         resetPasswordButton = findViewById(R.id.resetPasswordButton);
         progressBar = findViewById(R.id.progressBar);
@@ -42,18 +46,18 @@ public class ForgotPasswordActivity extends AppCompatActivity {
     }
 
     private void attemptPasswordReset() {
-        emailEditText.setError(null);
+        emailLayout.setError(null);
 
         String email = emailEditText.getText().toString().trim();
 
         if (TextUtils.isEmpty(email)) {
-            emailEditText.setError("Email is required");
+            emailLayout.setError("Email is required");
             emailEditText.requestFocus();
             return;
         }
 
         if (!isEmailValid(email)) {
-            emailEditText.setError("Invalid email address");
+            emailLayout.setError("Invalid email address");
             emailEditText.requestFocus();
             return;
         }
@@ -64,27 +68,33 @@ public class ForgotPasswordActivity extends AppCompatActivity {
     private void performPasswordReset(String email) {
         showProgress(true);
 
-        // TODO: Implement Supabase password reset
-        // Example:
-        // AuthRepository.resetPassword(email, new AuthCallback() {
-        //     @Override
-        //     public void onSuccess() {
-        //         showProgress(false);
-        //         Toast.makeText(ForgotPasswordActivity.this, 
-        //             "Password reset link sent to your email", Toast.LENGTH_LONG).show();
-        //         finish();
-        //     }
-        //
-        //     @Override
-        //     public void onError(String error) {
-        //         showProgress(false);
-        //         Toast.makeText(ForgotPasswordActivity.this, error, Toast.LENGTH_SHORT).show();
-        //     }
-        // });
+        com.roominate.services.SupabaseClient.getInstance().resetPassword(email, new com.roominate.services.SupabaseClient.ApiCallback() {
+            @Override
+            public void onSuccess(org.json.JSONObject response) {
+                runOnUiThread(() -> {
+                    showProgress(false);
+                    Toast.makeText(ForgotPasswordActivity.this, 
+                        "Verification code sent to your email", 
+                        Toast.LENGTH_SHORT).show();
+                    
+                    // Navigate to OTP verification screen
+                    Intent intent = new Intent(ForgotPasswordActivity.this, ResetPasswordVerificationActivity.class);
+                    intent.putExtra("email", email);
+                    startActivity(intent);
+                    finish();
+                });
+            }
 
-        // Temporary simulation
-        Toast.makeText(this, "Password reset functionality to be implemented", Toast.LENGTH_SHORT).show();
-        showProgress(false);
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    showProgress(false);
+                    Toast.makeText(ForgotPasswordActivity.this, 
+                        "Failed to send reset email: " + error, 
+                        Toast.LENGTH_LONG).show();
+                });
+            }
+        });
     }
 
     private boolean isEmailValid(String email) {

@@ -447,6 +447,168 @@ public class SupabaseClient {
     }
 
     /**
+     * Create a booking with custom JSON payload.
+     * This overload allows flexible field submission for payment integration.
+     * 
+     * @param bookingData JSONObject with fields like listing_id, tenant_id, start_date, end_date, total_amount, status, payment_reference
+     * @param callback ApiCallback for success/error handling
+     */
+    public void createBooking(org.json.JSONObject bookingData, ApiCallback callback) {
+        try {
+            if (appContext == null) {
+                callback.onError("Supabase client not initialized");
+                return;
+            }
+
+            android.content.SharedPreferences prefs = appContext.getSharedPreferences("roominate_prefs", android.content.Context.MODE_PRIVATE);
+            String tenantId = prefs.getString("user_id", null);
+            String accessToken = prefs.getString("access_token", null);
+
+            if (tenantId == null || tenantId.isEmpty()) {
+                callback.onError("User not signed in");
+                return;
+            }
+
+            // Ensure tenant_id is set from session if not provided
+            if (!bookingData.has("tenant_id")) {
+                bookingData.put("tenant_id", tenantId);
+            }
+
+            String url = BuildConfig.SUPABASE_URL + "/rest/v1/bookings";
+
+            RequestBody body = RequestBody.create(
+                    bookingData.toString(),
+                    MediaType.parse("application/json; charset=utf-8")
+            );
+
+            String anonKey = BuildConfig.SUPABASE_ANON_KEY;
+
+            Request.Builder reqB = new Request.Builder()
+                    .url(url)
+                    .post(body)
+                    .addHeader("apikey", anonKey)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=representation");
+
+            if (accessToken != null && !accessToken.isEmpty()) {
+                reqB.addHeader("Authorization", "Bearer " + accessToken);
+            } else {
+                reqB.addHeader("Authorization", "Bearer " + anonKey);
+            }
+
+            Request request = reqB.build();
+
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    android.util.Log.e(TAG, "createBooking(JSONObject) network failure", e);
+                    callback.onError("Network error: " + e.getMessage());
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    String responseBody = response.body() != null ? response.body().string() : "";
+                    try {
+                        if (response.isSuccessful()) {
+                            org.json.JSONArray arr = new org.json.JSONArray(responseBody);
+                            if (arr.length() > 0) {
+                                org.json.JSONObject bookingResult = arr.getJSONObject(0);
+                                org.json.JSONObject wrapper = new org.json.JSONObject();
+                                wrapper.put("booking", bookingResult);
+                                callback.onSuccess(wrapper);
+                            } else {
+                                callback.onError("Booking created but no data returned");
+                            }
+                        } else {
+                            if (responseBody != null && responseBody.contains("23503")) {
+                                callback.onError("Database foreign key error: user profile missing (23503). Please complete signup.");
+                            } else {
+                                callback.onError("Status=" + response.code() + " body=" + responseBody);
+                            }
+                        }
+                    } catch (Exception e) {
+                        android.util.Log.e(TAG, "createBooking(JSONObject) parse error", e);
+                        callback.onError("Failed to parse response: " + e.getMessage());
+                    }
+                }
+            });
+        } catch (Exception e) {
+            android.util.Log.e(TAG, "createBooking(JSONObject) exception", e);
+            callback.onError("Failed to create booking: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Generic method to invoke a Supabase Edge Function.
+     *
+     * @param functionName The name of the function to invoke (e.g., "lenco-payment").
+     * @param body The JSON payload to send to the function.
+     * @param callback The callback to handle success or error responses.
+     */
+    public void invokeEdgeFunction(String functionName, JSONObject body, ApiCallback callback) {
+        try {
+            String url = BuildConfig.SUPABASE_URL + FUNCTIONS_PATH + "/" + functionName;
+            Log.d(TAG, "Invoking Edge Function: " + url);
+            Log.d(TAG, "Payload: " + body.toString());
+
+            RequestBody requestBody = RequestBody.create(
+                    body.toString(),
+                    MediaType.parse("application/json; charset=utf-8")
+            );
+
+            Request.Builder requestBuilder = new Request.Builder()
+                    .url(url)
+                    .post(requestBody)
+                    .addHeader("Content-Type", "application/json");
+
+            // Add auth headers (API key and Bearer token)
+            addAuthHeaders(requestBuilder);
+
+            Request request = requestBuilder.build();
+
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "Invoke function '" + functionName + "' failed", e);
+                    callback.onError("Network error: " + e.getMessage());
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    String responseBody = response.body() != null ? response.body().string() : "";
+                    Log.d(TAG, "Function '" + functionName + "' response (" + response.code() + "): " + responseBody);
+
+                    try {
+                        // Handle cases where the function returns a non-JSON success response (e.g., just a string)
+                        if (response.isSuccessful() && (responseBody.isEmpty() || !responseBody.trim().startsWith("{"))) {
+                            JSONObject successWrapper = new JSONObject();
+                            successWrapper.put("message", responseBody);
+                            callback.onSuccess(successWrapper);
+                            return;
+                        }
+                        
+                        JSONObject json = new JSONObject(responseBody);
+
+                        if (response.isSuccessful()) {
+                            callback.onSuccess(json);
+                        } else {
+                            String error = json.optString("error", "Unknown error from function " + functionName);
+                            callback.onError(error);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Parse error for function '" + functionName + "' response", e);
+                        callback.onError("Failed to parse response: " + responseBody);
+                    }
+                }
+            });
+
+        } catch (Exception e) {
+            Log.e(TAG, "Invoke function '" + functionName + "' exception", e);
+            callback.onError("Failed to invoke function: " + e.getMessage());
+        }
+    }
+
+    /**
      * Callback interface for API responses
      */
     public interface ApiCallback {
@@ -514,6 +676,192 @@ public class SupabaseClient {
         } catch (Exception e) {
             Log.e(TAG, "SignIn exception", e);
             callback.onError("Failed to sign in: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Request a password reset email for the given email address.
+     * Supabase will send an email with a password reset link to the user.
+     */
+    public void resetPassword(String email, ApiCallback callback) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("email", email);
+
+            String url = BuildConfig.SUPABASE_URL + "/auth/v1/recover";
+
+            RequestBody requestBody = RequestBody.create(
+                    body.toString(),
+                    MediaType.parse("application/json; charset=utf-8")
+            );
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .post(requestBody)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .build();
+
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "ResetPassword NETWORK FAILURE", e);
+                    callback.onError("Network error: " + e.getMessage());
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    String responseBody = response.body() != null ? response.body().string() : "";
+                    try {
+                        JSONObject json = new JSONObject(responseBody);
+                        if (response.isSuccessful()) {
+                            // Supabase returns 200 even if email doesn't exist for security reasons
+                            callback.onSuccess(json);
+                        } else {
+                            String error = json.optString(
+                                    "error_description",
+                                    json.optString("msg", json.optString("error", "Failed to send reset email"))
+                            );
+                            callback.onError("Status=" + response.code() + " error=" + error);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "ResetPassword parse error", e);
+                        callback.onError("Failed to parse response");
+                    }
+                }
+            });
+
+        } catch (Exception e) {
+            Log.e(TAG, "ResetPassword exception", e);
+            callback.onError("Failed to reset password: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Verify OTP code for password reset or email verification.
+     * 
+     * @param email The user's email address
+     * @param token The OTP code received via email
+     * @param type The type of verification ("recovery" for password reset, "signup" for email verification)
+     * @param callback The callback to handle success or error responses
+     */
+    public void verifyOTP(String email, String token, String type, ApiCallback callback) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("email", email);
+            body.put("token", token);
+            body.put("type", type != null ? type : "recovery");
+
+            String url = BuildConfig.SUPABASE_URL + "/auth/v1/verify";
+
+            RequestBody requestBody = RequestBody.create(
+                    body.toString(),
+                    MediaType.parse("application/json; charset=utf-8")
+            );
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .post(requestBody)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + BuildConfig.SUPABASE_ANON_KEY)
+                    .build();
+
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "VerifyOTP NETWORK FAILURE", e);
+                    callback.onError("Network error: " + e.getMessage());
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    String responseBody = response.body() != null ? response.body().string() : "";
+                    Log.d(TAG, "VerifyOTP response: " + response.code() + " - " + responseBody);
+                    try {
+                        JSONObject json = new JSONObject(responseBody);
+                        if (response.isSuccessful()) {
+                            callback.onSuccess(json);
+                        } else {
+                            String error = json.optString(
+                                    "error_description",
+                                    json.optString("msg", json.optString("error", "Invalid verification code"))
+                            );
+                            callback.onError(error);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "VerifyOTP parse error", e);
+                        callback.onError("Failed to parse response");
+                    }
+                }
+            });
+
+        } catch (Exception e) {
+            Log.e(TAG, "VerifyOTP exception", e);
+            callback.onError("Failed to verify OTP: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Update user's password using an access token from OTP verification.
+     * 
+     * @param accessToken The access token obtained from verifyOTP
+     * @param newPassword The new password to set
+     * @param callback The callback to handle success or error responses
+     */
+    public void updatePassword(String accessToken, String newPassword, ApiCallback callback) {
+        try {
+            JSONObject body = new JSONObject();
+            body.put("password", newPassword);
+
+            String url = BuildConfig.SUPABASE_URL + "/auth/v1/user";
+
+            RequestBody requestBody = RequestBody.create(
+                    body.toString(),
+                    MediaType.parse("application/json; charset=utf-8")
+            );
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .put(requestBody)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
+                    .addHeader("Authorization", "Bearer " + accessToken)
+                    .build();
+
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "UpdatePassword NETWORK FAILURE", e);
+                    callback.onError("Network error: " + e.getMessage());
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    String responseBody = response.body() != null ? response.body().string() : "";
+                    Log.d(TAG, "UpdatePassword response: " + response.code() + " - " + responseBody);
+                    try {
+                        JSONObject json = new JSONObject(responseBody);
+                        if (response.isSuccessful()) {
+                            callback.onSuccess(json);
+                        } else {
+                            String error = json.optString(
+                                    "error_description",
+                                    json.optString("msg", json.optString("error", "Failed to update password"))
+                            );
+                            callback.onError(error);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "UpdatePassword parse error", e);
+                        callback.onError("Failed to parse response");
+                    }
+                }
+            });
+
+        } catch (Exception e) {
+            Log.e(TAG, "UpdatePassword exception", e);
+            callback.onError("Failed to update password: " + e.getMessage());
         }
     }
 
@@ -2836,6 +3184,8 @@ public class SupabaseClient {
         try {
             String url = BuildConfig.SUPABASE_URL + "/rest/v1/boarding_houses?id=eq." + propertyId;
 
+            Log.d(TAG, "Updating property " + propertyId + " with data: " + updateData.toString());
+
             RequestBody requestBody = RequestBody.create(
                     updateData.toString(),
                     MediaType.parse("application/json; charset=utf-8")
@@ -2844,7 +3194,8 @@ public class SupabaseClient {
             Request.Builder rb = new Request.Builder()
                     .url(url)
                     .patch(requestBody)
-                    .addHeader("Content-Type", "application/json");
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Prefer", "return=representation");
 
             addAuthHeaders(rb);
 
@@ -2861,8 +3212,13 @@ public class SupabaseClient {
                     String body = response.body() != null ? response.body().string() : "";
                     try {
                         if (response.isSuccessful()) {
-                            Log.d(TAG, "Updated property " + propertyId);
-                            callback.onSuccess(new org.json.JSONObject().put("success", true));
+                            Log.d(TAG, "Updated property " + propertyId + " - Response: " + body);
+                            org.json.JSONArray updatedArray = new org.json.JSONArray(body);
+                            if (updatedArray.length() > 0) {
+                                org.json.JSONObject updatedProperty = updatedArray.getJSONObject(0);
+                                Log.d(TAG, "Updated price_per_month: " + updatedProperty.optDouble("price_per_month"));
+                            }
+                            callback.onSuccess(new org.json.JSONObject().put("success", true).put("data", body));
                         } else {
                             Log.e(TAG, "Update failed: " + response.code() + " - " + body);
                             callback.onError("Failed to update: " + response.code() + " - " + body);

@@ -104,7 +104,7 @@ public class BookingActivity extends AppCompatActivity {
                             org.json.JSONObject prop = data.getJSONObject(0);
                             String name = prop.optString("name", prop.optString("title", "Boarding House"));
                             String address = prop.optString("address", "");
-                            double rate = prop.optDouble("monthly_rate", prop.optDouble("price", 0.0));
+                            double rate = prop.optDouble("price_per_month", prop.optDouble("monthly_rate", prop.optDouble("price", 0.0)));
 
                             boardingHouseNameTextView.setText(name);
                             propertyAddressTextView.setText(address);

@@ -107,7 +107,8 @@ public class HomeFragment extends Fragment {
                 
                 // Query boarding_houses where available=true (public listings)
                 // Exclude 'images' column since we fetch images separately from properties_media
-                String url = BuildConfig.SUPABASE_URL + "/rest/v1/boarding_houses?available=eq.true&status=eq.active&select=id,owner_id,name,description,address,city,province,monthly_rate,security_deposit,total_rooms,available_rooms,room_type,furnished,private_bathroom,electricity_included,water_included,internet_included,contact_person,contact_phone,amenities,status,latitude,longitude,created_at,updated_at";
+                // Note: Use price_per_month (new column) instead of monthly_rate (old column)
+                String url = BuildConfig.SUPABASE_URL + "/rest/v1/boarding_houses?available=eq.true&status=eq.active&select=id,owner_id,name,description,address,city,province,price_per_month,security_deposit,total_rooms,available_rooms,room_type,furnished,private_bathroom,electricity_included,water_included,internet_included,contact_person,contact_phone,amenities,status,latitude,longitude,created_at,updated_at";
                 Log.d(TAG, "Query URL: " + url);
                 
                 Request.Builder requestBuilder = new Request.Builder()
@@ -154,7 +155,8 @@ public class HomeFragment extends Fragment {
                                     property.setName(jsonObject.optString("name"));
                                     property.setDescription(jsonObject.optString("description"));
                                     property.setAddress(jsonObject.optString("address"));
-                                    property.setMonthlyRate(jsonObject.optDouble("monthly_rate", 0.0));
+                                    // Use price_per_month (new column) with fallback to monthly_rate (old column)
+                                    property.setMonthlyRate(jsonObject.optDouble("price_per_month", jsonObject.optDouble("monthly_rate", 0.0)));
                                     property.setSecurityDeposit(jsonObject.optDouble("security_deposit", 0.0));
                                     property.setStatus(jsonObject.optString("status", "draft"));
                                     
@@ -362,7 +364,7 @@ public class HomeFragment extends Fragment {
                         property.setName(jsonObject.optString("name"));
                         property.setDescription(jsonObject.optString("description"));
                         property.setAddress(jsonObject.optString("address"));
-                        property.setMonthlyRate(jsonObject.optDouble("monthly_rate", 0.0));
+                        property.setMonthlyRate(jsonObject.optDouble("price_per_month", jsonObject.optDouble("monthly_rate", 0.0)));
                         property.setSecurityDeposit(jsonObject.optDouble("security_deposit", 0.0));
                         property.setStatus(jsonObject.optString("status", "draft"));
                         

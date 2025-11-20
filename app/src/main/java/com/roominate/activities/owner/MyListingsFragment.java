@@ -167,7 +167,7 @@ public class MyListingsFragment extends Fragment {
                         property.setName(jsonObject.optString("name"));
                         property.setDescription(jsonObject.optString("description"));
                         property.setAddress(jsonObject.optString("address"));
-                        property.setMonthlyRate(jsonObject.optDouble("monthly_rate", 0.0));
+                        property.setMonthlyRate(jsonObject.optDouble("price_per_month", jsonObject.optDouble("monthly_rate", 0.0)));
                         property.setSecurityDeposit(jsonObject.optDouble("security_deposit", 0.0));
                         property.setStatus(jsonObject.optString("status", "draft"));
                         

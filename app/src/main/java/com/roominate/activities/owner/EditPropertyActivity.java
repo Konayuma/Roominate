@@ -510,7 +510,13 @@ public class EditPropertyActivity extends AppCompatActivity {
             updateData.put("province", provinceEditText.getText().toString().trim());
             updateData.put("latitude", currentLatitude);
             updateData.put("longitude", currentLongitude);
-            updateData.put("price_per_month", Double.parseDouble(priceEditText.getText().toString()));
+            
+            // Parse and log price before sending
+            String priceText = priceEditText.getText().toString().trim();
+            double price = Double.parseDouble(priceText);
+            Log.d(TAG, "Updating price_per_month to: " + price);
+            updateData.put("price_per_month", price);
+            
             updateData.put("security_deposit", TextUtils.isEmpty(depositEditText.getText()) ? 0 : Double.parseDouble(depositEditText.getText().toString()));
             updateData.put("total_rooms", Integer.parseInt(totalRoomsEditText.getText().toString()));
             updateData.put("available_rooms", Integer.parseInt(availableRoomsEditText.getText().toString()));

@@ -53,6 +53,8 @@
         <activity android:name=".activities.auth.RegisterActivity" />
         <activity android:name=".activities.auth.EmailConfirmationActivity" />
         <activity android:name=".activities.auth.ForgotPasswordActivity" />
+        <activity android:name=".activities.auth.ResetPasswordVerificationActivity" />
+        <activity android:name=".activities.auth.ResetPasswordNewPasswordActivity" />
         <activity android:name=".activities.auth.RoleSelectionActivity" />
         <activity android:name=".activities.auth.SignUpBasicInfoActivity" />
         <activity android:name=".activities.auth.SignUpEmailActivity" />

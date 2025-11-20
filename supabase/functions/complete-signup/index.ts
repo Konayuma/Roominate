@@ -130,6 +130,33 @@ Deno.serve(async (req: Request) => {
 
     console.log(new Date().toISOString(), 'User created successfully:', authData.user.id)
 
+    // 3. Sign in the user to get session tokens
+    console.log(new Date().toISOString(), 'Signing in user to get session...')
+    const { data: signInData, error: signInError } = await supabaseAdmin.auth.signInWithPassword({
+      email: email,
+      password: password
+    })
+
+    if (signInError) {
+      console.warn('Sign-in after creation failed:', signInError.message)
+      // User is created but sign-in failed - return without session
+      return new Response(
+        JSON.stringify({
+          success: true,
+          user: {
+            id: authData.user.id,
+            email: authData.user.email
+          },
+          profile: profileResult && profileResult.length > 0 ? profileResult[0] : null,
+          session: null,
+          warning: 'User created but auto sign-in failed'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log(new Date().toISOString(), 'User signed in successfully')
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -137,7 +164,12 @@ Deno.serve(async (req: Request) => {
           id: authData.user.id,
           email: authData.user.email
         },
-        profile: profileResult && profileResult.length > 0 ? profileResult[0] : null
+        profile: profileResult && profileResult.length > 0 ? profileResult[0] : null,
+        session: signInData.session ? {
+          access_token: signInData.session.access_token,
+          refresh_token: signInData.session.refresh_token,
+          expires_at: signInData.session.expires_at
+        } : null
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     )
