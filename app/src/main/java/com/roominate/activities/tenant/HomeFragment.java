@@ -2,12 +2,16 @@ package com.roominate.activities.tenant;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.location.Location;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageButton;
+import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -23,6 +27,7 @@ import com.roominate.R;
 import com.roominate.adapters.PropertyAdapter;
 import com.roominate.models.Property;
 import com.roominate.services.SupabaseClient;
+import com.roominate.utils.LocationHelper;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -47,6 +52,8 @@ public class HomeFragment extends Fragment {
     private ImageButton menuButton;
     private SwipeRefreshLayout swipeRefreshLayout;
     private ShimmerFrameLayout shimmerLayout;
+    private LocationHelper locationHelper;
+    private TextView locationText;
 
     @Nullable
     @Override
@@ -61,6 +68,7 @@ public class HomeFragment extends Fragment {
         swipeRefreshLayout.setOnRefreshListener(this::refreshProperties);
         
         shimmerLayout = v.findViewById(R.id.shimmerLayout);
+        locationText = v.findViewById(R.id.locationText);
         
         menuButton = v.findViewById(R.id.menuButton);
         menuButton.setOnClickListener(view -> {
@@ -79,10 +87,71 @@ public class HomeFragment extends Fragment {
         });
         recyclerView.setAdapter(adapter);
         
+        // Initialize location helper for nearby properties
+        locationHelper = new LocationHelper(getContext());
+        setupLocationTracking();
+        
         // Load available properties from Supabase
         loadAvailableProperties();
 
         return v;
+    }
+
+    /**
+     * Setup location tracking to show user's current location and nearby properties
+     */
+    private void setupLocationTracking() {
+        if (locationHelper.hasLocationPermission()) {
+            // Check if location settings are satisfied
+            locationHelper.checkLocationSettings(requireActivity(), satisfied -> {
+                if (satisfied) {
+                    startLocationUpdates();
+                }
+            });
+        } else {
+            // Request permission from Fragment (delegate to parent activity)
+            locationHelper.requestLocationPermission(requireActivity());
+        }
+    }
+
+    /**
+     * Start tracking location and update the location text display
+     */
+    private void startLocationUpdates() {
+        locationHelper.startLocationUpdates(new LocationHelper.LocationUpdateListener() {
+            @Override
+            public void onLocationReceived(Location location) {
+                updateLocationText(location);
+                Log.d(TAG, "User location: " + location.getLatitude() + ", " + location.getLongitude());
+            }
+
+            @Override
+            public void onLocationError(String error) {
+                Log.e(TAG, "Location error: " + error);
+                locationText.setText("Location unavailable");
+            }
+        });
+    }
+
+    /**
+     * Update the location text display with user's current city/area
+     */
+    private void updateLocationText(Location location) {
+        // Format coordinates to 4 decimal places
+        String coordText = String.format("📍 %.2f km away", 0.5); // Placeholder distance
+        locationText.setText(coordText);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LocationHelper.LOCATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                setupLocationTracking();
+            } else {
+                locationText.setText("Nearby — location permission denied");
+            }
+        }
     }
 
     private void loadAvailableProperties() {
@@ -462,4 +531,21 @@ public class HomeFragment extends Fragment {
             }
         }).start();
     }
-}
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        // Stop location updates to save battery when fragment is not visible
+        if (locationHelper != null) {
+            locationHelper.stopLocationUpdates();
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Resume location updates when fragment becomes visible
+        if (locationHelper != null && locationHelper.hasLocationPermission()) {
+            startLocationUpdates();
+        }
+    }
