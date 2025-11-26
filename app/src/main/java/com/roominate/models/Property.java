@@ -22,6 +22,7 @@ public class Property {
     private double latitude;
     private double longitude;
     private int availableRooms;
+    private float distanceFromUser; // Distance in km for location-based filtering
 
     // Constructors
     public Property() {
@@ -31,6 +32,7 @@ public class Property {
         this.latitude = 0.0;
         this.longitude = 0.0;
         this.availableRooms = 0;
+        this.distanceFromUser = 0.0f;
     }
 
     // Getters and Setters
@@ -80,6 +82,9 @@ public class Property {
 
     public int getAvailableRooms() { return availableRooms; }
     public void setAvailableRooms(int availableRooms) { this.availableRooms = availableRooms; }
+
+    public float getDistanceFromUser() { return distanceFromUser; }
+    public void setDistanceFromUser(float distanceFromUser) { this.distanceFromUser = distanceFromUser; }
 
 
     // JSON Serialization/Deserialization

@@ -223,9 +223,21 @@ public class LoginActivity extends AppCompatActivity {
                                 String role = finalRoleFromAuth != null ? finalRoleFromAuth : profileResponse.optString("role", "tenant");
                                 Log.d("LoginActivity", "Final role determined: " + role);
                                 
-                                // Store the final role in SharedPreferences
+                                // Extract profile details
+                                String firstName = profileResponse.optString("first_name", "");
+                                String lastName = profileResponse.optString("last_name", "");
+                                String phone = profileResponse.optString("phone", "");
+                                String fullName = (firstName + " " + lastName).trim();
+                                
+                                // Store the final role and profile details in SharedPreferences
                                 SharedPreferences prefs = getSharedPreferences("roominate_prefs", MODE_PRIVATE);
-                                prefs.edit().putString("user_role", role).apply();
+                                prefs.edit()
+                                    .putString("user_role", role)
+                                    .putString("first_name", firstName)
+                                    .putString("last_name", lastName)
+                                    .putString("phone", phone)
+                                    .putString("user_name", fullName)
+                                    .apply();
                                 
                                 redirectToDashboard(role);
                             } catch (Exception e) {

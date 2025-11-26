@@ -7,15 +7,17 @@
 -- Extension needed for gen_random_uuid
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- 1) users (profile) - extended profile information
-CREATE TABLE IF NOT EXISTS public.users (
+-- 1) profiles (extended user info)
+CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email text,
   role text NOT NULL DEFAULT 'tenant', -- 'tenant' | 'owner' | 'admin'
   first_name text,
   last_name text,
   display_name text,
-  date_of_birth date,
+  dob date,
   phone text,
+  occupation text,
   avatar_url text,
   bio text,
   created_at timestamptz DEFAULT now(),
@@ -165,7 +167,7 @@ CREATE INDEX IF NOT EXISTS idx_media_listing ON public.properties_media (listing
 CREATE TABLE IF NOT EXISTS public.bookings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   listing_id uuid NOT NULL REFERENCES public.boarding_houses(id) ON DELETE CASCADE,
-  tenant_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  tenant_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   start_date date NOT NULL,
   end_date date,
   total_amount numeric(10,2),
@@ -181,7 +183,7 @@ CREATE INDEX IF NOT EXISTS idx_bookings_tenant ON public.bookings (tenant_id);
 CREATE TABLE IF NOT EXISTS public.reviews (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   listing_id uuid NOT NULL REFERENCES public.boarding_houses(id) ON DELETE CASCADE,
-  reviewer_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  reviewer_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   rating smallint NOT NULL CHECK (rating >= 1 AND rating <= 5),
   comment text,
   created_at timestamptz DEFAULT now()
@@ -192,7 +194,7 @@ CREATE INDEX IF NOT EXISTS idx_reviews_listing ON public.reviews (listing_id);
 -- 7) favorites
 CREATE TABLE IF NOT EXISTS public.favorites (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   listing_id uuid NOT NULL REFERENCES public.boarding_houses(id) ON DELETE CASCADE,
   created_at timestamptz DEFAULT now(),
   UNIQUE (user_id, listing_id)
@@ -204,8 +206,8 @@ CREATE INDEX IF NOT EXISTS idx_favorites_user ON public.favorites (user_id);
 CREATE TABLE IF NOT EXISTS public.inquiries (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   listing_id uuid NOT NULL REFERENCES public.boarding_houses(id) ON DELETE CASCADE,
-  user_id uuid REFERENCES public.users(id), -- nullable for guests
-  owner_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES public.profiles(id), -- nullable for guests
+  owner_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   message text NOT NULL,
   email text,
   phone text,
@@ -218,7 +220,7 @@ CREATE INDEX IF NOT EXISTS idx_inquiries_listing ON public.inquiries (listing_id
 -- 9) notifications
 CREATE TABLE IF NOT EXISTS public.notifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   title text,
   body text,
   data jsonb,
@@ -231,7 +233,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications (user_
 -- 10) audit_logs (optional)
 CREATE TABLE IF NOT EXISTS public.audit_logs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  actor_id uuid REFERENCES public.users(id),
+  actor_id uuid REFERENCES public.profiles(id),
   action text NOT NULL,
   resource text,
   metadata jsonb,
@@ -242,21 +244,21 @@ CREATE INDEX IF NOT EXISTS idx_audit_actor ON public.audit_logs (actor_id);
 
 -- ========== ROW LEVEL SECURITY POLICIES ==========
 
--- 1) users table - allow users to manage their own profile
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+-- 1) profiles table - allow users to manage their own profile
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 -- Ensure idempotency: drop existing policies (if any) before creating them
-DROP POLICY IF EXISTS "Insert own profile" ON public.users;
-DROP POLICY IF EXISTS "Select own profile" ON public.users;
-DROP POLICY IF EXISTS "Update own profile" ON public.users;
+DROP POLICY IF EXISTS "Insert own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Select own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Update own profile" ON public.profiles;
 
-CREATE POLICY "Insert own profile" ON public.users 
+CREATE POLICY "Insert own profile" ON public.profiles 
   FOR INSERT WITH CHECK (auth.uid() = id);
 
-CREATE POLICY "Select own profile" ON public.users 
+CREATE POLICY "Select own profile" ON public.profiles 
   FOR SELECT USING (auth.uid() = id);
 
-CREATE POLICY "Update own profile" ON public.users 
+CREATE POLICY "Update own profile" ON public.profiles 
   FOR UPDATE USING (auth.uid() = id);
 
 -- 2) boarding_houses - owners manage their listings, public can read available ones
@@ -465,19 +467,21 @@ BEGIN
 
   -- Defensive insert: coalesce missing names and role
   BEGIN
-    INSERT INTO public.users (
+    INSERT INTO public.profiles (
       id,
+      email,
       role,
       first_name,
       last_name,
       display_name,
-      date_of_birth,
+      dob,
       phone,
       created_at,
       updated_at
     )
     VALUES (
       NEW.id,
+      NEW.email,
       COALESCE(NEW.raw_user_meta_data->>'role', 'tenant'),
       NULLIF(NEW.raw_user_meta_data->>'first_name', ''),
       NULLIF(NEW.raw_user_meta_data->>'last_name', ''),

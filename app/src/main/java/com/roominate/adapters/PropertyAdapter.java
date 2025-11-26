@@ -82,6 +82,15 @@ public class PropertyAdapter extends RecyclerView.Adapter<PropertyAdapter.ViewHo
         return properties.size();
     }
 
+    /**
+     * Update the adapter's property list and refresh the view
+     */
+    public void updateProperties(List<Property> newProperties) {
+        properties.clear();
+        properties.addAll(newProperties);
+        notifyDataSetChanged();
+    }
+
     static class ViewHolder extends RecyclerView.ViewHolder {
         ImageView thumbnail;
         TextView title;

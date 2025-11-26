@@ -54,6 +54,8 @@ public class HomeFragment extends Fragment {
     private ShimmerFrameLayout shimmerLayout;
     private LocationHelper locationHelper;
     private TextView locationText;
+    private Location userLocation;
+    private static final float NEARBY_RADIUS_KM = 5.0f; // 5 km radius for nearby properties
 
     @Nullable
     @Override
@@ -105,17 +107,87 @@ public class HomeFragment extends Fragment {
             // Check if location settings are satisfied
             locationHelper.checkLocationSettings(requireActivity(), satisfied -> {
                 if (satisfied) {
-                    startLocationUpdates();
+                    startTrackingUserLocation();
+                } else {
+                    updateLocationTextNoDenial();
                 }
             });
         } else {
+            // Permission denied - show semantic message
+            updateLocationTextPermissionDenied();
             // Request permission from Fragment (delegate to parent activity)
             locationHelper.requestLocationPermission(requireActivity());
         }
     }
 
     /**
-     * Start tracking location and update the location text display
+     * Start tracking user location and filter nearby properties
+     */
+    private void startTrackingUserLocation() {
+        locationHelper.startLocationUpdates(new LocationHelper.LocationUpdateListener() {
+            @Override
+            public void onLocationReceived(Location location) {
+                userLocation = location;
+                updateLocationTextWithCoordinates(location);
+                // Filter and show nearby properties based on distance
+                filterAndDisplayNearbyProperties(location);
+                Log.d(TAG, "User location: " + location.getLatitude() + ", " + location.getLongitude() + " (accuracy: " + location.getAccuracy() + "m)");
+            }
+
+            @Override
+            public void onLocationError(String error) {
+                Log.e(TAG, "Location error: " + error);
+                updateLocationTextNoDenial();
+            }
+        });
+    }
+
+    /**
+     * Filter properties based on distance from user location and display nearby ones
+     */
+    private void filterAndDisplayNearbyProperties(Location userLoc) {
+        if (properties.isEmpty()) return;
+        
+        // Sort properties by distance and filter nearby ones
+        List<Property> nearbyProperties = new ArrayList<>();
+        for (Property property : properties) {
+            if (property.getLatitude() != 0 && property.getLongitude() != 0) {
+                float[] distance = new float[1];
+                android.location.Location.distanceBetween(
+                    userLoc.getLatitude(), userLoc.getLongitude(),
+                    property.getLatitude(), property.getLongitude(),
+                    distance
+                );
+                // Convert meters to km and filter within NEARBY_RADIUS_KM
+                float distanceKm = distance[0] / 1000.0f;
+                if (distanceKm <= NEARBY_RADIUS_KM) {
+                    property.setDistanceFromUser(distanceKm);
+                    nearbyProperties.add(property);
+                }
+            }
+        }
+        
+        // Sort by distance (nearest first)
+        nearbyProperties.sort((a, b) -> Float.compare(a.getDistanceFromUser(), b.getDistanceFromUser()));
+        
+        // Update adapter with nearby properties (or all if none nearby)
+        if (!nearbyProperties.isEmpty()) {
+            adapter.updateProperties(nearbyProperties);
+        }
+    }
+
+    /**
+     * Update location text with actual user coordinates
+     */
+    private void updateLocationTextWithCoordinates(Location location) {
+        String distText = String.format("Nearby results • %.2f km radius", NEARBY_RADIUS_KM);
+        if (isAdded()) {
+            locationText.setText(distText);
+        }
+    }
+
+    /**
+     * Start tracking location and update the location text display (deprecated - use startTrackingUserLocation)
      */
     private void startLocationUpdates() {
         locationHelper.startLocationUpdates(new LocationHelper.LocationUpdateListener() {
@@ -134,12 +206,30 @@ public class HomeFragment extends Fragment {
     }
 
     /**
-     * Update the location text display with user's current city/area
+     * Update the location text display with user's current city/area (deprecated - use updateLocationTextWithCoordinates)
      */
     private void updateLocationText(Location location) {
         // Format coordinates to 4 decimal places
         String coordText = String.format("📍 %.2f km away", 0.5); // Placeholder distance
         locationText.setText(coordText);
+    }
+
+    /**
+     * Update location text when permission is denied
+     */
+    private void updateLocationTextPermissionDenied() {
+        if (isAdded()) {
+            locationText.setText("Featured properties");
+        }
+    }
+
+    /**
+     * Update location text when GPS is disabled
+     */
+    private void updateLocationTextNoDenial() {
+        if (isAdded()) {
+            locationText.setText("Enable GPS for nearby properties");
+        }
     }
 
     @Override
@@ -149,7 +239,7 @@ public class HomeFragment extends Fragment {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 setupLocationTracking();
             } else {
-                locationText.setText("Nearby — location permission denied");
+                updateLocationTextPermissionDenied();
             }
         }
     }
@@ -548,4 +638,4 @@ public class HomeFragment extends Fragment {
         if (locationHelper != null && locationHelper.hasLocationPermission()) {
             startLocationUpdates();
         }
-    }
+    }}

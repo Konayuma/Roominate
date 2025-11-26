@@ -9,13 +9,16 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -64,7 +67,11 @@ public class SearchFragment extends Fragment {
     private List<Property> filteredProperties = new ArrayList<>();
     private PropertyAdapter adapter;
 
-    // State
+    // Filter state
+    private Double minPrice = null;
+    private Double maxPrice = null;
+    private String locationFilter = null;
+    private Integer minRooms = null;
     private boolean isMapViewActive = false;
 
     @Nullable
@@ -136,10 +143,8 @@ public class SearchFragment extends Fragment {
             public void afterTextChanged(Editable s) {}
         });
 
-        // Filter button
-        filterButton.setOnClickListener(v -> {
-            Toast.makeText(requireContext(), "Filter functionality coming soon", Toast.LENGTH_SHORT).show();
-        });
+        // Filter button - open filter dialog
+        filterButton.setOnClickListener(v -> showFilterDialog());
 
         // View toggle buttons (list view layout)
         listViewButton.setOnClickListener(v -> switchToListView());
@@ -148,6 +153,129 @@ public class SearchFragment extends Fragment {
         // View toggle buttons (map view layout)
         listViewButton2.setOnClickListener(v -> switchToListView());
         mapViewButton2.setOnClickListener(v -> switchToMapView());
+    }
+
+    private void showFilterDialog() {
+        View filterView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_search_filters, null);
+
+        // Get filter UI elements
+        EditText locationEditText = filterView.findViewById(R.id.locationEditText);
+        SeekBar priceSeekBar = filterView.findViewById(R.id.priceRangeSeekBar);
+        TextView priceTextView = filterView.findViewById(R.id.priceTextView);
+
+        // Set current values
+        if (locationFilter != null) {
+            locationEditText.setText(locationFilter);
+        }
+
+        if (maxPrice != null) {
+            priceSeekBar.setProgress((maxPrice.intValue()) / 100);
+            priceTextView.setText(String.format("Max: K%.0f", maxPrice));
+        } else {
+            priceTextView.setText("Max: No limit");
+        }
+
+        // Price slider listener
+        priceSeekBar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(android.widget.SeekBar seekBar, int progress, boolean fromUser) {
+                int price = progress * 100;
+                if (price == 0) {
+                    priceTextView.setText("Max: No limit");
+                } else {
+                    priceTextView.setText(String.format("Max: K%,d", price));
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(android.widget.SeekBar seekBar) {}
+
+            @Override
+            public void onStopTrackingTouch(android.widget.SeekBar seekBar) {}
+        });
+
+        // Show dialog
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle("Search Filters")
+            .setView(filterView)
+            .setPositiveButton("Apply", (dialog, which) -> {
+                applyFilters(locationEditText.getText().toString(), priceSeekBar.getProgress());
+            })
+            .setNegativeButton("Clear Filters", (dialog, which) -> {
+                clearFilters();
+            })
+            .setNeutralButton("Cancel", null)
+            .show();
+    }
+
+    private void applyFilters(String location, int priceProgress) {
+        // Set filter values
+        locationFilter = location.isEmpty() ? null : location;
+        maxPrice = priceProgress == 0 ? null : (double) (priceProgress * 100);
+        minPrice = null;
+
+        // Update filter button to show active count
+        int activeCount = 0;
+        if (locationFilter != null) activeCount++;
+        if (maxPrice != null) activeCount++;
+
+        if (activeCount > 0) {
+            filterButton.setText("Filters (" + activeCount + ")");
+        } else {
+            filterButton.setText("Filter");
+        }
+
+        // Re-filter properties
+        applyAllFilters();
+    }
+
+    private void clearFilters() {
+        minPrice = null;
+        maxPrice = null;
+        locationFilter = null;
+        minRooms = null;
+        filterButton.setText("Filter");
+
+        // Re-filter properties
+        applyAllFilters();
+        Toast.makeText(requireContext(), "Filters cleared", Toast.LENGTH_SHORT).show();
+    }
+
+    private void applyAllFilters() {
+        filteredProperties.clear();
+
+        for (Property property : allProperties) {
+            boolean matches = true;
+
+            // Check price filter
+            if (maxPrice != null && property.getMonthlyRate() > maxPrice) {
+                matches = false;
+            }
+
+            if (minPrice != null && property.getMonthlyRate() < minPrice) {
+                matches = false;
+            }
+
+            // Check location filter
+            if (locationFilter != null && !locationFilter.isEmpty()) {
+                String searchLower = locationFilter.toLowerCase().trim();
+                if (!property.getAddress().toLowerCase().contains(searchLower) &&
+                    !property.getName().toLowerCase().contains(searchLower)) {
+                    matches = false;
+                }
+            }
+
+            // Check available rooms filter
+            if (minRooms != null && property.getAvailableRooms() < minRooms) {
+                matches = false;
+            }
+
+            if (matches) {
+                filteredProperties.add(property);
+            }
+        }
+
+        updateUI();
     }
 
     private void loadAllProperties() {
@@ -270,20 +398,47 @@ public class SearchFragment extends Fragment {
     }
 
     private void filterProperties(String query) {
-        filteredProperties.clear();
-        
+        // If search is empty, apply stored filters
         if (query == null || query.trim().isEmpty()) {
-            filteredProperties.addAll(allProperties);
-        } else {
-            String lowerQuery = query.toLowerCase().trim();
-            for (Property property : allProperties) {
-                if (property.getName().toLowerCase().contains(lowerQuery) ||
-                    property.getAddress().toLowerCase().contains(lowerQuery)) {
-                    filteredProperties.add(property);
+            applyAllFilters();
+            return;
+        }
+
+        // Filter by search query combined with existing filters
+        String lowerQuery = query.toLowerCase().trim();
+        filteredProperties.clear();
+
+        for (Property property : allProperties) {
+            boolean matchesSearch = property.getName().toLowerCase().contains(lowerQuery) ||
+                                   property.getAddress().toLowerCase().contains(lowerQuery);
+
+            if (!matchesSearch) continue;
+
+            boolean matches = true;
+
+            // Apply stored filters
+            if (maxPrice != null && property.getMonthlyRate() > maxPrice) {
+                matches = false;
+            }
+            if (minPrice != null && property.getMonthlyRate() < minPrice) {
+                matches = false;
+            }
+            if (locationFilter != null && !locationFilter.isEmpty()) {
+                String searchLower = locationFilter.toLowerCase().trim();
+                if (!property.getAddress().toLowerCase().contains(searchLower) &&
+                    !property.getName().toLowerCase().contains(searchLower)) {
+                    matches = false;
                 }
             }
+            if (minRooms != null && property.getAvailableRooms() < minRooms) {
+                matches = false;
+            }
+
+            if (matches) {
+                filteredProperties.add(property);
+            }
         }
-        
+
         updateUI();
     }
 
